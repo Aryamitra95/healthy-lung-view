@@ -6,10 +6,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { User, Lock, Stethoscope, AlertCircle, Loader2 } from 'lucide-react';
 
 // DynamoDB Integration - Add these imports and interfaces
-import { GetCommand } from "@aws-sdk/lib-dynamodb";
+import { GetCommand, DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
-import bcrypt from "bcryptjs";
 
 // DynamoDB Client Setup
 const client = new DynamoDBClient({
@@ -21,15 +19,15 @@ const client = new DynamoDBClient({
 });
 
 const dynamoClient = DynamoDBDocumentClient.from(client);
-const TABLE_NAME = import.meta.env.VITE_DYNAMODB_TABLE_NAME || 'user';
+const TABLE_NAME = import.meta.env.VITE_DYNAMODB_TABLE_NAME || 'users';
 
 // Authentication Function
-const authenticateUser = async (userId: string, password: string) => {
+const authenticateUser = async (userID: string, password: string) => {
   try {
     // Check if user exists
     const getUserCommand = new GetCommand({
       TableName: TABLE_NAME,
-      Key: { userId: userId.trim() },
+      Key: { userId: userID.trim() },
     });
 
     const result = await dynamoClient.send(getUserCommand);
@@ -39,7 +37,7 @@ const authenticateUser = async (userId: string, password: string) => {
     }
 
     // Verify password
-    const isPasswordValid = await bcrypt.compare(password, result.Item.password);
+    const isPasswordValid = password === result.Item.password;
 
     if (!isPasswordValid) {
       return { success: false, message: "Invalid password. Please check your credentials." };
