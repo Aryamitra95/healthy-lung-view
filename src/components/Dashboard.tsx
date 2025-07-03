@@ -7,7 +7,7 @@ import { LogOut, Stethoscope } from 'lucide-react';
 import FileUpload from './FileUpload';
 import PredictionDisplay from './PredictionDisplay';
 import ReportDisplay from './ReportDisplay';
-import axios from 'axios';
+import { generateMedicalReport } from '@/services/medicalReportService';
 
 interface DashboardProps {
   username: string;
@@ -31,10 +31,12 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
   const [prediction, setPrediction] = useState<PredictionData | null>(null);
   const [report, setReport] = useState<ReportData | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
 
   const handlePredictionReceived = (predictionData: PredictionData) => {
     setPrediction(predictionData);
     setReport(null); // Reset report when new prediction is received
+    setReportError(null); // Reset error when new prediction is received
   };
 
   const handleGenerateReport = async () => {
@@ -42,76 +44,22 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
 
     try {
       setIsGeneratingReport(true);
+      setReportError(null); // Clear any previous errors
       
-      // Simulate API call with mock data for demonstration
-      // Replace with actual backend endpoint
-      setTimeout(() => {
-        const mockReport = {
-          summary: `Based on the chest X-ray analysis, the AI model has identified a high probability (${prediction.pneumonia}%) of pneumonia. The imaging shows characteristic patterns consistent with inflammatory lung disease affecting the pulmonary parenchyma.
-
-Key findings include:
-• Increased opacity in lung fields
-• Possible consolidation patterns
-• Signs of inflammatory response
-
-This analysis should be correlated with clinical symptoms and physical examination findings for comprehensive patient assessment.`,
-          
-          cause: `Pneumonia is typically caused by:
-
-Primary Causes:
-• Bacterial infections (most common: Streptococcus pneumoniae)
-• Viral infections (influenza, respiratory syncytial virus)
-• Fungal infections (in immunocompromised patients)
-• Aspiration of foreign material
-
-Risk Factors:
-• Age (very young or elderly)
-• Compromised immune system
-• Chronic lung diseases
-• Recent respiratory tract infection
-• Smoking or alcohol abuse
-
-The radiological patterns observed suggest an infectious etiology, though clinical correlation is essential for definitive diagnosis.`,
-          
-          suggestedActions: `Immediate Actions:
-1. Clinical correlation with patient symptoms (fever, cough, dyspnea)
-2. Laboratory investigations (CBC, CRP, procalcitonin)
-3. Sputum culture and sensitivity testing
-4. Blood cultures if systemically unwell
-
-Treatment Considerations:
-• Empirical antibiotic therapy based on local guidelines
-• Supportive care (oxygen therapy if hypoxemic)
-• Monitor for complications
-• Follow-up imaging in 48-72 hours if not improving
-
-Patient Management:
-• Assess severity using CURB-65 or PSI scores
-• Consider hospitalization criteria
-• Ensure adequate hydration and rest
-• Patient education regarding medication compliance
-
-Follow-up:
-• Clinical reassessment in 48-72 hours
-• Repeat chest X-ray if symptoms persist or worsen
-• Complete antibiotic course as prescribed
-• Pneumonia vaccination discussion post-recovery`
-        };
-        setReport(mockReport);
-        setIsGeneratingReport(false);
-      }, 3000);
-
-      // Uncomment and modify this for actual API integration:
-      /*
-      const response = await axios.post('YOUR_BACKEND_ENDPOINT/generate-report', {
-        prediction: prediction,
-        image_data: 'base64_image_data_here'
-      });
-      setReport(response.data);
-      */
+      const generatedReport = await generateMedicalReport(prediction);
+      
+      if (generatedReport) {
+        setReport(generatedReport);
+      } else {
+        setReportError('Failed to generate medical report. Please check your API configuration and try again.');
+        setReport(null);
+      }
+      
     } catch (error) {
       console.error('Report generation error:', error);
-      alert('Error generating report');
+      setReportError('An error occurred while generating the report. Please try again.');
+      setReport(null);
+    } finally {
       setIsGeneratingReport(false);
     }
   };
@@ -191,7 +139,7 @@ Follow-up:
 
         {/* Report Section */}
         <div>
-          <ReportDisplay report={report} />
+          <ReportDisplay report={report} error={reportError} />
         </div>
       </main>
     </div>

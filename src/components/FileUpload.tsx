@@ -1,12 +1,11 @@
-
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Upload, File, Image as ImageIcon } from 'lucide-react';
-import axios from 'axios';
+import { uploadImageToHFSpace, PredictionData } from '@/services/api';
 
 interface FileUploadProps {
-  onPredictionReceived: (prediction: any) => void;
+  onPredictionReceived: (prediction: PredictionData) => void;
 }
 
 const FileUpload: React.FC<FileUploadProps> = ({ onPredictionReceived }) => {
@@ -14,13 +13,23 @@ const FileUpload: React.FC<FileUploadProps> = ({ onPredictionReceived }) => {
   const [fileName, setFileName] = useState<string>('');
   const [previewURL, setPreviewURL] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
+      if (!selectedFile.type.startsWith('image/')) {
+        setError('Only image files are allowed.');
+        return;
+      }
+      if (selectedFile.size > 5 * 1024 * 1024) {
+        setError('File is too large (max 5MB).');
+        return;
+      }
       setFile(selectedFile);
       setFileName(selectedFile.name);
       setPreviewURL(URL.createObjectURL(selectedFile));
+      setError(null);
     }
   };
 
@@ -29,36 +38,18 @@ const FileUpload: React.FC<FileUploadProps> = ({ onPredictionReceived }) => {
       alert('Please select an image');
       return;
     }
-
-    const formData = new FormData();
-    formData.append('image', file);
-
+    setIsProcessing(true);
+    setError(null);
     try {
-      setIsProcessing(true);
-      
-      // Simulate API call with mock data for demonstration
-      // Replace with actual backend endpoint
-      setTimeout(() => {
-        const mockPrediction = {
-          healthy: 5,
-          tuberculosis: 20,
-          pneumonia: 75,
-          prediction: 'Pneumonia'
-        };
-        onPredictionReceived(mockPrediction);
-        setIsProcessing(false);
-      }, 2000);
-
-      // Uncomment and modify this for actual API integration:
-      /*
-      const response = await axios.post('YOUR_BACKEND_ENDPOINT/upload-image', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      onPredictionReceived(response.data);
-      */
-    } catch (error) {
-      console.error('Upload error:', error);
-      alert('Error uploading image');
+      const prediction = await uploadImageToHFSpace(file);
+      onPredictionReceived(prediction);
+    } catch (err: any) {
+      setError(
+        err.message.includes('Failed to fetch')
+          ? 'Unable to reach the prediction server. Please try again later.'
+          : err.message
+      );
+    } finally {
       setIsProcessing(false);
     }
   };
@@ -144,6 +135,14 @@ const FileUpload: React.FC<FileUploadProps> = ({ onPredictionReceived }) => {
             <div className="animate-spin rounded-full h-8 w-8 border-4 border-medical-green border-t-transparent mx-auto mb-4"></div>
             <p className="text-medical-green font-medium">Analyzing X-ray image...</p>
             <p className="text-sm text-gray-600 mt-1">Please wait while our AI processes your image</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {error && (
+        <Card className="border-2 border-red-300 bg-red-50 animate-fade-in">
+          <CardContent className="p-4 text-center">
+            <p className="text-red-700 font-medium">{error}</p>
           </CardContent>
         </Card>
       )}

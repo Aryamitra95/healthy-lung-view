@@ -59,6 +59,40 @@ This project is built with:
 - React
 - shadcn-ui
 - Tailwind CSS
+- Nebius AI API (for medical report generation)
+
+## Medical Report Generation Feature
+
+This application includes an AI-powered medical report generator that creates comprehensive chest X-ray analysis reports. The feature provides:
+
+### Features:
+- **AI-Powered Analysis**: Uses the Nebius API with Llama-3_1-Nemotron-Ultra-253B-v1 model
+- **Comprehensive Reports**: Generates detailed medical reports with three sections:
+  - **Summary**: Professional medical summary of X-ray findings
+  - **Cause**: Detailed explanation of potential causes and risk factors
+  - **Suggested Actions**: Comprehensive treatment recommendations and next steps
+- **Error Handling**: Clear error messages when API is unavailable or fails
+- **Medical Accuracy**: Designed for healthcare professionals with appropriate clinical recommendations
+
+### Setup:
+1. Get your Nebius API key from [https://api.studio.nebius.com/](https://api.studio.nebius.com/)
+2. Create a `.env` file in the project root with:
+   ```
+   VITE_NEBIUS_API_KEY=your_nebius_api_key_here
+   ```
+3. Restart the development server
+
+### Usage:
+1. Upload a chest X-ray image
+2. Review the AI prediction results
+3. Click "Generate Report" to create a comprehensive medical report
+4. View the report in the tabbed interface (Summary, Cause, Suggested Actions)
+
+### Important Notes:
+- This is a medical AI tool and should be used as a supplementary diagnostic aid
+- All reports should be reviewed by qualified healthcare professionals
+- The system includes appropriate medical disclaimers and recommendations
+- Clear error messages are shown when the API is unavailable
 
 ## How can I deploy this project?
 
