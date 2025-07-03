@@ -1,23 +1,107 @@
-
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
-import { User, Lock, Stethoscope } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { User, Lock, Stethoscope, AlertCircle, Loader2 } from 'lucide-react';
+
+// DynamoDB Integration - Add these imports and interfaces
+import { GetCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
+import bcrypt from "bcryptjs";
+
+// DynamoDB Client Setup
+const client = new DynamoDBClient({
+  region: import.meta.env.VITE_AWS_REGION || 'us-east-1',
+  credentials: {
+    accessKeyId: import.meta.env.VITE_AWS_ACCESS_KEY_ID || '',
+    secretAccessKey: import.meta.env.VITE_AWS_SECRET_ACCESS_KEY || '',
+  },
+});
+
+const dynamoClient = DynamoDBDocumentClient.from(client);
+const TABLE_NAME = import.meta.env.VITE_DYNAMODB_TABLE_NAME || 'user';
+
+// Authentication Function
+const authenticateUser = async (userId: string, password: string) => {
+  try {
+    // Check if user exists
+    const getUserCommand = new GetCommand({
+      TableName: TABLE_NAME,
+      Key: { userId: userId.trim() },
+    });
+
+    const result = await dynamoClient.send(getUserCommand);
+
+    if (!result.Item) {
+      return { success: false, message: "Invalid user ID. User does not exist." };
+    }
+
+    // Verify password
+    const isPasswordValid = await bcrypt.compare(password, result.Item.password);
+
+    if (!isPasswordValid) {
+      return { success: false, message: "Invalid password. Please check your credentials." };
+    }
+
+    // Return user data without password
+    const { password: _, ...userWithoutPassword } = result.Item;
+    return { success: true, message: "Login successful", user: userWithoutPassword };
+  } catch (error) {
+    console.error("Login error:", error);
+    return { success: false, message: "An error occurred during login. Please try again." };
+  }
+};
 
 interface LoginPageProps {
-  onLogin: (username: string) => void;
+  onLogin: (user: any) => void; // Changed to accept user object instead of username
 }
 
 const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  // Added state for loading and error handling
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string>('');
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (username.trim()) {
-      onLogin(username);
+    
+    // Input validation
+    if (!username.trim() || !password.trim()) {
+      setError('Please enter both User ID and Password');
+      return;
     }
+
+    setIsLoading(true);
+    setError('');
+
+    try {
+      // Authenticate with DynamoDB
+      const result = await authenticateUser(username, password);
+      
+      if (result.success) {
+        onLogin(result.user); // Pass user object instead of username
+      } else {
+        setError(result.message);
+      }
+    } catch (error) {
+      setError('Network error. Please check your connection and try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Clear error when user types
+  const handleUsernameChange = (value: string) => {
+    setUsername(value);
+    if (error) setError('');
+  };
+
+  const handlePasswordChange = (value: string) => {
+    setPassword(value);
+    if (error) setError('');
   };
 
   return (
@@ -80,10 +164,11 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                     <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                     <Input
                       type="text"
-                      placeholder="Username"
+                      placeholder="User ID"
                       value={username}
-                      onChange={(e) => setUsername(e.target.value)}
+                      onChange={(e) => handleUsernameChange(e.target.value)}
                       className="pl-12 h-12 border-2 border-medical-green-light focus:border-medical-green transition-colors"
+                      disabled={isLoading}
                       required
                     />
                   </div>
@@ -96,20 +181,44 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                       type="password"
                       placeholder="Password"
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={(e) => handlePasswordChange(e.target.value)}
                       className="pl-12 h-12 border-2 border-medical-green-light focus:border-medical-green transition-colors"
+                      disabled={isLoading}
                       required
                     />
                   </div>
                 </div>
 
+                {/* Error Alert - Added */}
+                {error && (
+                  <Alert variant="destructive" className="border-red-200">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription className="text-sm">
+                      {error}
+                    </AlertDescription>
+                  </Alert>
+                )}
+
                 <Button
                   type="submit"
                   className="w-full h-12 text-lg font-semibold medical-gradient hover:opacity-90 transition-opacity"
+                  disabled={isLoading}
                 >
-                  Log In
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Logging in...
+                    </>
+                  ) : (
+                    'Log In'
+                  )}
                 </Button>
               </form>
+
+              {/* Added security note */}
+              <div className="mt-6 text-center text-sm text-gray-500">
+                <p>Secure authentication powered by AWS DynamoDB</p>
+              </div>
             </CardContent>
           </Card>
         </div>
