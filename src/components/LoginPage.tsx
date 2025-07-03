@@ -68,6 +68,9 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   // Added state for loading and error handling
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>('');
+  // Add state for user type
+  type UserType = 'doctor' | 'registrar';
+  const [userType, setUserType] = useState<UserType>('doctor');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,7 +89,7 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
       const result = await authenticateUser(username, password);
       
       if (result.success) {
-        onLogin(result.user); // Pass user object instead of username
+        onLogin({ ...result.user, role: userType }); // Pass user object with role
       } else {
         setError(result.message);
       }
@@ -163,6 +166,32 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               </div>
 
               <form onSubmit={handleLogin} className="space-y-6">
+                {/* User Type Toggle */}
+                <div className="flex gap-4 mb-4">
+                  <label className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      name="userType"
+                      value="doctor"
+                      checked={userType === 'doctor'}
+                      onChange={() => setUserType('doctor')}
+                      disabled={isLoading}
+                    />
+                    <span>Doctor</span>
+                  </label>
+                  <label className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      name="userType"
+                      value="registrar"
+                      checked={userType === 'registrar'}
+                      onChange={() => setUserType('registrar')}
+                      disabled={isLoading}
+                    />
+                    <span>Registrar</span>
+                  </label>
+                </div>
+
                 <div className="space-y-2">
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
