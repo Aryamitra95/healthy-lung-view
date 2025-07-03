@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import LoginPage from '@/components/LoginPage';
 import Dashboard from '@/components/Dashboard';
@@ -7,8 +6,8 @@ const Index = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentUser, setCurrentUser] = useState('');
 
-  const handleLogin = (username: string) => {
-    setCurrentUser(username);
+  const handleLogin = (user: any) => {
+    setCurrentUser(user.userID);
     setIsLoggedIn(true);
   };
 
