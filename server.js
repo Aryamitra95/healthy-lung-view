@@ -75,8 +75,8 @@ app.get('/api/search-patients', async (req, res) => {
         const scanResult = await docClient.send(
             new ScanCommand({
                 TableName: tableNames.patients,
-                FilterExpression: 'contains(#name, :q) OR contains(patientId, :q) OR contains(phone, :q)',
-                ExpressionAttributeNames: { '#name': 'name' },
+                FilterExpression: 'contains(#name, :q) OR contains(#PatientID, :q)',
+                ExpressionAttributeNames: { '#name': 'name', '#PatientID': 'PatientID' },
                 ExpressionAttributeValues: { ':q': q },
                 Limit: 20,
             })
@@ -97,7 +97,7 @@ app.get('/api/patient/:id', async (req, res) => {
         const result = await docClient.send(
             new GetCommand({
                 TableName: tableNames.patients,
-                Key: { patientId: id }
+                Key: { PatientID: id }
             })
         );
         
@@ -116,8 +116,8 @@ app.get('/api/patient/:id', async (req, res) => {
 app.put('/api/update-patient', async (req, res) => {
     const patientData = req.body;
     
-    if (!patientData.patientId) {
-        return res.status(400).json({ error: 'Patient ID is required' });
+    if (!patientData.PatientID) {
+        return res.status(400).json({ error: 'PatientID is required' });
     }
 
     try {
@@ -233,11 +233,11 @@ app.get('/api/download-patient-image', async (req, res) => {
 app.post('/api/create-patient', async (req, res) => {
     try {
         const patientData = req.body;
-        const patientId = uuidv4();
+        const PatientID = uuidv4();
         
         const newPatient = {
             ...patientData,
-            patientId,
+            PatientID,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         };
@@ -319,6 +319,28 @@ Respond ONLY with a valid JSON object, with no markdown, no code block, and no e
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Failed to generate report' });
+    }
+});
+
+// Fetch user by userId endpoint
+app.get('/api/users/:userId', async (req, res) => {
+    const { userId } = req.params;
+    if (!userId) {
+        return res.status(400).json({ error: 'Missing userId' });
+    }
+    try {
+        const command = new GetCommand({
+            TableName: tableNames.patients, // Use Patients table
+            Key: { PatientID: userId },     // Use correct key name
+        });
+        const { Item } = await docClient.send(command);
+        if (!Item) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        return res.status(200).json(Item);
+    } catch (error) {
+        console.error('Error fetching user:', error);
+        return res.status(500).json({ error: 'Internal Server Error' });
     }
 });
 
