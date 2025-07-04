@@ -1,22 +1,21 @@
-
 import React from 'react';
+import type { HFSpaceResponse } from '@/services/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { FileText } from 'lucide-react';
 
-interface PredictionData {
-  healthy: number;
-  tuberculosis: number;
-  pneumonia: number;
-  prediction: string;
-}
-
 interface PredictionDisplayProps {
-  prediction: PredictionData | null;
+  prediction: HFSpaceResponse | null;
   onGenerateReport: () => void;
   isGeneratingReport: boolean;
 }
+
+// Helper to safely convert to number and clamp between 0 and 100
+const safeNumber = (val: any) => {
+  const num = Number(val);
+  return isNaN(num) ? 0 : Math.max(0, Math.min(100, num));
+};
 
 const PredictionDisplay: React.FC<PredictionDisplayProps> = ({
   prediction,
@@ -38,10 +37,11 @@ const PredictionDisplay: React.FC<PredictionDisplayProps> = ({
     );
   }
 
+  console.log('Prediction object:', prediction);
   const predictions = [
-    { label: 'Healthy', value: prediction.healthy, color: 'bg-green-500' },
-    { label: 'Tuberculosis', value: prediction.tuberculosis, color: 'bg-yellow-500' },
-    { label: 'Pneumonia', value: prediction.pneumonia, color: 'bg-red-500' }
+    { label: 'Healthy', value: safeNumber(prediction.healthy_score), color: 'bg-green-500' },
+    { label: 'Tuberculosis', value: safeNumber(prediction.tb_score), color: 'bg-yellow-500' },
+    { label: 'Pneumonia', value: safeNumber(prediction.pneumonia_score), color: 'bg-red-500' }
   ];
 
   const maxPrediction = predictions.reduce((max, curr) => 
@@ -54,27 +54,40 @@ const PredictionDisplay: React.FC<PredictionDisplayProps> = ({
         <CardTitle className="text-medical-green">Prediction</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
-        {predictions.map((pred) => (
-          <div key={pred.label} className="space-y-2">
-            <div className="flex justify-between items-center">
-              <span className="font-medium">{pred.label}:</span>
-              <span className="text-sm font-semibold">{pred.value}%</span>
+        {predictions.map((pred) => {
+          console.log('Progress value for', pred.label, ':', pred.value, typeof pred.value);
+          return (
+            <div key={pred.label} className="space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="font-medium">{pred.label}:</span>
+                <span className="text-sm font-semibold">{pred.value}%</span>
+              </div>
+              <Progress 
+                value={pred.value}
+                className="h-2"
+              />
             </div>
-            <Progress 
-              value={pred.value} 
-              className="h-2"
-            />
-          </div>
-        ))}
+          );
+        })}
 
         <div className="mt-6 p-4 medical-gradient rounded-lg">
           <p className="text-white text-sm font-medium mb-2">
             Probable Disease According to AI Diagnosis:
           </p>
           <p className="text-white text-2xl font-bold">
-            {prediction.prediction}
+            {prediction.word}
           </p>
         </div>
+
+        {prediction.imageUrl && (
+          <div className="flex justify-center my-4">
+            <img
+              src={prediction.imageUrl}
+              alt="Uploaded X-ray"
+              className="max-h-60 rounded-lg border-2 border-medical-green-light shadow-md"
+            />
+          </div>
+        )}
 
         <Button
           onClick={onGenerateReport}
