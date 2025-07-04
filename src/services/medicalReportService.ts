@@ -1,10 +1,20 @@
 import axios from 'axios';
 
+export interface SymptomData {
+  coughMoreThanThreeWeek: boolean;
+  fever: boolean;
+  sweating: boolean;
+  chestPain: boolean;
+  smoking: boolean;
+  shortnessOfBreathe: boolean;
+}
+
 export interface PredictionData {
   healthy: number;
   tuberculosis: number;
   pneumonia: number;
   prediction: string;
+  symptoms?: SymptomData;
 }
 
 export interface ReportData {
@@ -35,7 +45,7 @@ export const generateMedicalReport = async (predictionData: PredictionData): Pro
     const response = await fetch('http://localhost:5001/api/generate-report', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(predictionData)
+      body: JSON.stringify({ ...predictionData, symptoms: predictionData.symptoms })
     });
     if (!response.ok) return null;
     const data = await response.json();

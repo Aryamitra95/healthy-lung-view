@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { User, Lock, Stethoscope, AlertCircle, Loader2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 // DynamoDB Integration - Add these imports and interfaces
 import { GetCommand, DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
@@ -22,39 +23,43 @@ const dynamoClient = DynamoDBDocumentClient.from(client);
 const TABLE_NAME = import.meta.env.VITE_DYNAMODB_TABLE_NAME;
 
 // Authentication Function
-const authenticateUser = async (userID: String, password: String) => {
+const authenticateUser = async (
+  userID: string,
+  userType: 'doctor' | 'register',
+  password: string
+) => {
   try {
-    // Debug: log command parameters
-    const key = { userID: userID.trim() /*, createdAt: timestamp if needed */ };
-    console.log("GetItem Key:", key, "TableName:", TABLE_NAME);
-
+    // Log parameters for debugging
+    console.log('TABLE_NAME:', TABLE_NAME, 'userID:', userID, 'userType:', userType);
+    // Query by userID (partition key)
+    const key = { userID: userID.trim() };
     const getUserCommand = new GetCommand({ TableName: TABLE_NAME, Key: key });
     const result = await dynamoClient.send(getUserCommand);
-
     // No item found?
     if (!result.Item) {
-      return { success: false, message: "Invalid user ID. User does not exist." };
+      return { success: false, message: 'Invalid user ID. User does not exist.' };
     }
-
+    // Check userType (case-sensitive)
+    if (result.Item.userType !== userType) {
+      return { success: false, message: `User type mismatch. Expected: ${result.Item.userType}` };
+    }
     // Verify password
     const isPasswordValid = password === result.Item.password;
     if (!isPasswordValid) {
-      return { success: false, message: "Invalid password. Please check your credentials." };
+      return { success: false, message: 'Invalid password. Please check your credentials.' };
     }
-
     // Omit password in response
     const { password: _, ...userWithoutPassword } = result.Item;
-    return { success: true, message: "Login successful", user: userWithoutPassword };
+    return { success: true, message: 'Login successful', user: userWithoutPassword };
   } catch (error: any) {
-    console.error("Login error:", error);
-    // Distinguish key/schema mismatch vs missing table vs other AWS errors
-    if (error.name === "ValidationException") {
-      return { success: false, message: "Key schema mismatch. Check your primary key attributes." };
+    console.error('Login error:', error);
+    if (error.name === 'ValidationException') {
+      return { success: false, message: 'Key schema mismatch. Check your primary key attributes.' };
     }
-    if (error.name === "ResourceNotFoundException") {
-      return { success: false, message: "Table not found. Verify table name and region." };
+    if (error.name === 'ResourceNotFoundException') {
+      return { success: false, message: 'Table not found. Verify table name and region.' };
     }
-    return { success: false, message: "An error occurred during login. Please try again." };
+    return { success: false, message: 'An error occurred during login. Please try again.' };
   }
 };
 
@@ -68,25 +73,30 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   // Added state for loading and error handling
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string>('');
+  // Add state for user type
+  type UserType = 'doctor' | 'register';
+  const [userType, setUserType] = useState<UserType>('doctor');
+  const navigate = useNavigate();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Input validation
     if (!username.trim() || !password.trim()) {
       setError('Please enter both User ID and Password');
       return;
     }
-
     setIsLoading(true);
     setError('');
-
     try {
-      // Authenticate with DynamoDB
-      const result = await authenticateUser(username, password);
-      
+      const result = await authenticateUser(username, userType, password);
       if (result.success) {
-        onLogin(result.user); // Pass user object instead of username
+        onLogin(result.user.userID); // Only pass userID up
+        if (result.user.userType === 'doctor') {
+          console.log('Redirecting to /doctor');
+          navigate('/doctor');
+        } else if (result.user.userType === 'register') {
+          console.log('Redirecting to /registerer');
+          navigate('/registerer');
+        }
       } else {
         setError(result.message);
       }
@@ -163,6 +173,32 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               </div>
 
               <form onSubmit={handleLogin} className="space-y-6">
+                {/* User Type Toggle */}
+                <div className="flex gap-4 mb-4">
+                  <label className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      name="userType"
+                      value="doctor"
+                      checked={userType === 'doctor'}
+                      onChange={() => setUserType('doctor')}
+                      disabled={isLoading}
+                    />
+                    <span>Doctor</span>
+                  </label>
+                  <label className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      name="userType"
+                      value="register"
+                      checked={userType === 'register'}
+                      onChange={() => setUserType('register')}
+                      disabled={isLoading}
+                    />
+                    <span>Registrar</span>
+                  </label>
+                </div>
+
                 <div className="space-y-2">
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />

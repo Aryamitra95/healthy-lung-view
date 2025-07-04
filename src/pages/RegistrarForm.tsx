@@ -1,38 +1,14 @@
-
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { LogOut, Stethoscope } from 'lucide-react';
-import FileUpload from './FileUpload';
-import PredictionDisplay from './PredictionDisplay';
-import ReportDisplay from './ReportDisplay';
-import { generateMedicalReport } from '@/services/medicalReportService';
+import { Checkbox } from '@/components/ui/checkbox';
 import { docClient } from '@/services/dynamodb';
-import { GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { PutCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { v4 as uuidv4 } from 'uuid';
+import { LogOut, Stethoscope, User as UserIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import FloatingSearchBar from './FloatingSearchBar';
+import FloatingSearchBar from '../components/FloatingSearchBar';
 import { Dialog } from '@headlessui/react';
-import RegistrarForm from '../pages/RegistrarForm';
-import PatientForm from '../pages/PatientForm';
-
-interface DashboardProps {
-  userId: string;
-  onLogout: () => void;
-}
-
-interface PredictionData {
-  healthy: number;
-  tuberculosis: number;
-  pneumonia: number;
-  prediction: string;
-}
-
-interface ReportData {
-  summary: string;
-  cause: string;
-  suggestedActions: string;
-}
+import PatientForm from './PatientForm';
 
 const symptomsList = [
   'Cough (more than three weeks)',
@@ -43,15 +19,26 @@ const symptomsList = [
   'Shortness of Breath',
 ];
 
-const Dashboard: React.FC<DashboardProps> = ({ userId, onLogout }) => {
+type SymptomKey = typeof symptomsList[number];
+
+interface RegistrarFormProps {
+  userId: string;
+  onLogout: () => void;
+}
+
+const RegistrarForm: React.FC<RegistrarFormProps> = ({ userId, onLogout }) => {
+  const [selected, setSelected] = useState<Record<string, boolean>>(
+    Object.fromEntries(symptomsList.map(s => [s, false])) as any
+  );
   const [name, setName] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [sex, setSex] = useState('');
+  const [age, setAge] = useState('');
+  const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileError, setProfileError] = useState('');
   const navigate = useNavigate();
-  const [prediction, setPrediction] = useState<PredictionData | null>(null);
-  const [report, setReport] = useState<ReportData | null>(null);
-  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
-  const [reportError, setReportError] = useState<string | null>(null);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editPatient, setEditPatient] = useState(null);
@@ -62,62 +49,30 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, onLogout }) => {
 
   useEffect(() => {
     const fetchName = async () => {
-      setLoading(true);
-      setError('');
+      setProfileLoading(true);
+      setProfileError('');
       const trimmedUserId = userId.trim();
       console.log('Fetching user profile:', { userID: trimmedUserId, table: import.meta.env.VITE_DYNAMODB_TABLE_NAME });
       try {
         const result = await docClient.send(new GetCommand({ TableName: import.meta.env.VITE_DYNAMODB_TABLE_NAME, Key: { userID: trimmedUserId } }));
         if (!result.Item || !result.Item.userName) {
-          setError('User not found.');
+          setProfileError('User not found.');
           setTimeout(() => navigate('/login', { replace: true }), 1500);
           return;
         }
         setName(result.Item.userName);
       } catch (err) {
-        setError('Failed to fetch user profile.');
+        setProfileError('Failed to fetch user profile.');
         setTimeout(() => navigate('/login', { replace: true }), 1500);
       } finally {
-        setLoading(false);
+        setProfileLoading(false);
       }
     };
     if (userId) fetchName();
   }, [userId, navigate]);
 
-  const handleLogout = () => {
-    localStorage.removeItem('user');
-    window.location.href = '/login';
-  };
-
-  const handlePredictionReceived = (predictionData: PredictionData) => {
-    setPrediction(predictionData);
-    setReport(null); // Reset report when new prediction is received
-    setReportError(null); // Reset error when new prediction is received
-  };
-
-  const handleGenerateReport = async () => {
-    if (!prediction) return;
-
-    try {
-      setIsGeneratingReport(true);
-      setReportError(null); // Clear any previous errors
-      
-      const generatedReport = await generateMedicalReport(prediction);
-      
-      if (generatedReport) {
-        setReport(generatedReport);
-      } else {
-        setReportError('Failed to generate medical report. Please check your API configuration and try again.');
-        setReport(null);
-      }
-      
-    } catch (error) {
-      console.error('Report generation error:', error);
-      setReportError('An error occurred while generating the report. Please try again.');
-      setReport(null);
-    } finally {
-      setIsGeneratingReport(false);
-    }
+  const handleToggle = (key: SymptomKey) => {
+    setSelected(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
   const handlePatientSelect = (patient) => {
@@ -144,8 +99,9 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, onLogout }) => {
     setEditError('');
     setEditSuccess('');
     try {
+      const patientsTableName = import.meta.env.VITE_PATIENTS_TABLE || 'Patients';
       await docClient.send(
-        new PutCommand({ TableName: import.meta.env.VITE_PATIENTS_TABLE || 'Patients', Item: editPatient })
+        new PutCommand({ TableName: patientsTableName, Item: editPatient })
       );
       setEditSuccess('Patient updated successfully!');
       setSelectedPatient(editPatient);
@@ -157,8 +113,42 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, onLogout }) => {
     }
   };
 
+  const handleSubmit = async () => {
+    setSuccess('');
+    setError('');
+    if (!name.trim() || !sex.trim() || !age.trim()) {
+      setError('Please fill all required fields.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const patientsTableName = import.meta.env.VITE_PATIENTS_TABLE || 'Patients';
+      const patientId = uuidv4();
+      const symptoms = Object.keys(selected).filter(key => selected[key as string]);
+      const item = {
+        patientId,
+        name,
+        sex,
+        age: Number(age),
+        symptoms,
+        createdAt: new Date().toISOString(),
+      };
+      await docClient.send(new PutCommand({ TableName: patientsTableName, Item: item }));
+      setSuccess('Patient record created successfully!');
+      setName('');
+      setSex('');
+      setAge('');
+      setSelected(Object.fromEntries(symptomsList.map(s => [s, false])) as any);
+    } catch (err) {
+      setError('Failed to create patient record.');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen medical-bg">
+    <div className="min-h-screen bg-gray-100 flex flex-col">
       <FloatingSearchBar onSelect={handlePatientSelect} />
       <Dialog open={modalOpen} onClose={() => setModalOpen(false)} className="fixed z-50 inset-0 overflow-y-auto">
         <div className="flex items-center justify-center min-h-screen">
@@ -225,7 +215,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, onLogout }) => {
         </div>
       </Dialog>
       {/* Header */}
-      <header className="w-full bg-white shadow-sm border-b-4 border-green-500 flex items-center justify-between px-8 py-4 gap-8">
+      <header className="w-full bg-white shadow-sm border-b-4 border-green-500 flex items-center justify-between px-8 py-4">
         <div className="flex items-center gap-3">
           <div className="bg-green-100 p-2 rounded-xl">
             <Stethoscope className="w-8 h-8 text-green-600" />
@@ -249,59 +239,83 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, onLogout }) => {
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-6 py-8">
-        {/* Welcome Section */}
-      <div className="flex justify-center my-8">
+      {/* Welcome Section */}
+      <div className="flex justify-center items-center my-8 w-full">
         <div className="w-full max-w-2xl bg-gradient-to-r from-green-400 to-green-600 border-2 border-white rounded-2xl shadow-lg p-8 flex items-center gap-6">
           <div className="flex items-center justify-center w-20 h-20 rounded-full bg-white border-4 border-green-200">
             <span className="text-3xl font-bold text-green-600">
-              {loading ? '...' : name.charAt(0).toUpperCase()}
+              {profileLoading ? '...' : name.charAt(0).toUpperCase()}
             </span>
           </div>
           <div>
             <div className="text-2xl font-bold text-white mb-1">
-              {loading ? 'Loading...' : `Welcome, Dr. ${name}`}
+              {profileLoading ? 'Loading...' : `Welcome, ${name}`}
             </div>
             <div className="text-white/90 text-lg">
-              {loading ? 'Fetching your profile...' : 'Ready to analyze chest X-rays with AI-powered diagnostics'}
+              {profileLoading ? 'Fetching your profile...' : 'Ready to analyze chest X-rays with AI-powered diagnostics'}
             </div>
-            {error && <p className="text-red-500 mt-2">{error}</p>}
+            {profileError && <p className="text-red-500 mt-2">{profileError}</p>}
           </div>
         </div>
       </div>
 
-        {/* Main Dashboard Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-          {/* File Upload Section */}
-          <div>
-            <Card className="border-2 border-medical-green-light">
-              <CardHeader>
-                <CardTitle className="text-medical-green">Upload X-ray Image</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <FileUpload onPredictionReceived={handlePredictionReceived} />
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Prediction Section */}
-          <div>
-            <PredictionDisplay
-              prediction={prediction}
-              onGenerateReport={handleGenerateReport}
-              isGeneratingReport={isGeneratingReport}
+      {/* Main Content */}
+      <main className="flex-1 flex items-center justify-center">
+        <div className="w-full max-w-lg rounded-2xl shadow-lg border border-green-200 bg-green-50 p-8 mt-8 mb-8">
+          <h2 className="text-2xl font-bold text-green-800 mb-6 text-center">Create new Patient:</h2>
+          <div className="flex flex-col gap-4 mb-6">
+            <input
+              className="border border-green-300 rounded-md p-3 w-full focus:outline-none focus:ring-2 focus:ring-green-400 text-lg"
+              placeholder="Name"
+              onChange={e => setName(e.target.value)}
             />
+            <div className="flex gap-4">
+              <select
+                className="border border-green-300 rounded-md p-3 w-1/2 focus:outline-none focus:ring-2 focus:ring-green-400 text-lg"
+                value={sex}
+                onChange={e => setSex(e.target.value)}
+              >
+                <option value="">Sex</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+              </select>
+              <input
+                className="border border-green-300 rounded-md p-3 w-1/2 focus:outline-none focus:ring-2 focus:ring-green-400 text-lg"
+                placeholder="Age"
+                type="number"
+                value={age}
+                onChange={e => setAge(e.target.value)}
+                min={0}
+              />
+            </div>
           </div>
-        </div>
-
-        {/* Report Section */}
-        <div>
-          <ReportDisplay report={report} error={reportError} />
+          <div className="mb-6">
+            <div className="grid grid-cols-2 gap-4">
+              {symptomsList.map(s => (
+                <label key={s} className="flex items-center gap-2 bg-white rounded-md px-3 py-2 border border-green-100">
+                  <Checkbox
+                    checked={selected[s as string]}
+                    onCheckedChange={() => handleToggle(s as SymptomKey)}
+                  />
+                  <span className="text-green-900 text-base">{s}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          <Button
+            onClick={handleSubmit}
+            disabled={loading}
+            className="w-full h-12 text-lg font-semibold bg-green-600 hover:bg-green-700 text-white rounded-md shadow-md transition-colors"
+          >
+            {loading ? 'Submitting...' : 'Submit Symptoms'}
+          </Button>
+          {success && <div className="text-green-700 mt-4 text-center font-medium">{success}</div>}
+          {error && <div className="text-red-600 mt-4 text-center font-medium">{error}</div>}
         </div>
       </main>
     </div>
   );
 };
 
-export default Dashboard;
+export default RegistrarForm; 

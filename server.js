@@ -2,15 +2,60 @@ import express from 'express';
 import cors from 'cors';
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
+import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
+import { DynamoDBDocumentClient, ScanCommand } from '@aws-sdk/lib-dynamodb';
 dotenv.config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
+// AWS DynamoDB configuration
+const dynamoClient = new DynamoDBClient({
+    region: process.env.VITE_AWS_REGION || 'eu-north-1',
+    credentials: {
+        accessKeyId: process.env.VITE_AWS_ACCESS_KEY_ID || '',
+        secretAccessKey: process.env.VITE_AWS_SECRET_ACCESS_KEY || ''
+    }
+});
+
+const docClient = DynamoDBDocumentClient.from(dynamoClient);
+
+// Table names configuration
+const tableNames = {
+    users: process.env.VITE_DYNAMODB_TABLE_NAME || 'users',
+    patients: process.env.VITE_PATIENTS_TABLE || 'Patients'
+};
+
 const client = new OpenAI({
     baseURL: 'https://api.studio.nebius.com/v1/',
     apiKey: process.env.NEBIUS_API_KEY,
+});
+
+// Search patients endpoint
+app.get('/api/search-patients', async (req, res) => {
+    const { q } = req.query;
+    
+    if (!q || typeof q !== 'string') {
+        return res.json([]);
+    }
+
+    try {
+        const scanResult = await docClient.send(
+            new ScanCommand({
+                TableName: tableNames.patients,
+                FilterExpression: 'contains(#name, :q)',
+                ExpressionAttributeNames: { '#name': 'name' },
+                ExpressionAttributeValues: { ':q': q },
+                Limit: 10,
+            })
+        );
+        
+        res.json(scanResult.Items || []);
+    } catch (err) {
+        console.error('Error searching patients:', err);
+        res.status(500).json({ error: 'Failed to search patients' });
+    }
 });
 
 app.post('/api/generate-report', async (req, res) => {
