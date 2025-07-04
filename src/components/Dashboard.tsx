@@ -12,12 +12,13 @@ import { docClient } from '@/services/dynamodb';
 import { GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { useNavigate } from 'react-router-dom';
 import FloatingSearchBar from './FloatingSearchBar';
+import PatientDetailsModal from './PatientDetailsModal';
 import { Dialog } from '@headlessui/react';
 import RegistrarForm from '../pages/RegistrarForm';
 import PatientForm from '../pages/PatientForm';
 
 interface DashboardProps {
-  userId: string;
+  username: string;
   onLogout: () => void;
 }
 
@@ -34,16 +35,26 @@ interface ReportData {
   suggestedActions: string;
 }
 
-const symptomsList = [
-  'Cough (more than three weeks)',
-  'Fever',
-  'Sweating',
-  'Smoking',
-  'Chest Pain',
-  'Shortness of Breath',
-];
+interface Patient {
+  patientId: string;
+  name: string;
+  age: number;
+  sex?: string;
+  symptoms?: string[];
+  email?: string;
+  phone?: string;
+  address?: string;
+  images?: string[];
+  dateOfBirth?: string;
+  emergencyContact?: string;
+  medicalHistory?: string;
+  allergies?: string;
+  medications?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
 
-const Dashboard: React.FC<DashboardProps> = ({ userId, onLogout }) => {
+const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -52,19 +63,15 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, onLogout }) => {
   const [report, setReport] = useState<ReportData | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
-  const [selectedPatient, setSelectedPatient] = useState(null);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editPatient, setEditPatient] = useState(null);
-  const [editLoading, setEditLoading] = useState(false);
-  const [editError, setEditError] = useState('');
-  const [editSuccess, setEditSuccess] = useState('');
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [patientModalOpen, setPatientModalOpen] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
 
   useEffect(() => {
     const fetchName = async () => {
       setLoading(true);
       setError('');
-      const trimmedUserId = userId.trim();
+      const trimmedUserId = username.trim();
       console.log('Fetching user profile:', { userID: trimmedUserId, table: import.meta.env.VITE_DYNAMODB_TABLE_NAME });
       try {
         const result = await docClient.send(new GetCommand({ TableName: import.meta.env.VITE_DYNAMODB_TABLE_NAME, Key: { userID: trimmedUserId } }));
@@ -81,8 +88,8 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, onLogout }) => {
         setLoading(false);
       }
     };
-    if (userId) fetchName();
-  }, [userId, navigate]);
+    if (username) fetchName();
+  }, [username, navigate]);
 
   const handleLogout = () => {
     localStorage.removeItem('user');
@@ -120,100 +127,29 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, onLogout }) => {
     }
   };
 
-  const handlePatientSelect = (patient) => {
+  const handlePatientSelect = (patient: Patient) => {
+    console.log('Selected patient:', patient);
     setSelectedPatient(patient);
-    setEditPatient({ ...patient });
-    setModalOpen(true);
+    setPatientModalOpen(true);
   };
 
-  const handleEditChange = (field, value) => {
-    setEditPatient((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const handleEditSymptomToggle = (symptom) => {
-    setEditPatient((prev) => ({
-      ...prev,
-      symptoms: prev.symptoms?.includes(symptom)
-        ? prev.symptoms.filter((s) => s !== symptom)
-        : [...(prev.symptoms || []), symptom],
-    }));
-  };
-
-  const handleEditSave = async () => {
-    setEditLoading(true);
-    setEditError('');
-    setEditSuccess('');
-    try {
-      await docClient.send(
-        new PutCommand({ TableName: import.meta.env.VITE_PATIENTS_TABLE || 'Patients', Item: editPatient })
-      );
-      setEditSuccess('Patient updated successfully!');
-      setSelectedPatient(editPatient);
-      setTimeout(() => setModalOpen(false), 1000);
-    } catch (err) {
-      setEditError('Failed to update patient.');
-    } finally {
-      setEditLoading(false);
-    }
+  const handlePatientUpdated = (updatedPatient: Patient) => {
+    setSelectedPatient(updatedPatient);
+    console.log('Patient updated:', updatedPatient);
   };
 
   return (
     <div className="min-h-screen medical-bg">
       <FloatingSearchBar onSelect={handlePatientSelect} />
-      <Dialog open={modalOpen} onClose={() => setModalOpen(false)} className="fixed z-50 inset-0 overflow-y-auto">
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="fixed inset-0 bg-black bg-opacity-30" aria-hidden="true" />
-          <div className="relative bg-white rounded-xl shadow-xl p-8 w-full max-w-lg z-10">
-            <Dialog.Title className="text-xl font-bold mb-4">Edit Patient</Dialog.Title>
-            {editPatient && (
-              <form onSubmit={e => { e.preventDefault(); handleEditSave(); }}>
-                <div className="mb-2">
-                  <label className="block font-medium">Name:</label>
-                  <input className="w-full border rounded p-2" value={editPatient.name} onChange={e => handleEditChange('name', e.target.value)} />
-                </div>
-                <div className="mb-2">
-                  <label className="block font-medium">Age:</label>
-                  <input className="w-full border rounded p-2" type="number" value={editPatient.age} onChange={e => handleEditChange('age', Number(e.target.value))} />
-                </div>
-                <div className="mb-2">
-                  <label className="block font-medium">Sex:</label>
-                  <select className="w-full border rounded p-2" value={editPatient.sex || ''} onChange={e => handleEditChange('sex', e.target.value)}>
-                    <option value="">Select</option>
-                    <option value="Male">Male</option>
-                    <option value="Female">Female</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-                <div className="mb-2">
-                  <label className="block font-medium">Symptoms:</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {symptomsList.map(symptom => (
-                      <label key={symptom} className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={editPatient.symptoms?.includes(symptom) || false}
-                          onChange={() => handleEditSymptomToggle(symptom)}
-                        />
-                        <span>{symptom}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-                {editError && <div className="text-red-600 mt-2">{editError}</div>}
-                {editSuccess && <div className="text-green-600 mt-2">{editSuccess}</div>}
-                <div className="flex gap-4 mt-6">
-                  <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded" disabled={editLoading}>
-                    {editLoading ? 'Saving...' : 'Save'}
-                  </button>
-                  <button type="button" className="px-4 py-2 bg-gray-300 text-gray-800 rounded" onClick={() => setModalOpen(false)}>
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
-        </div>
-      </Dialog>
+      
+      {/* Patient Details Modal */}
+      <PatientDetailsModal
+        isOpen={patientModalOpen}
+        onClose={() => setPatientModalOpen(false)}
+        patient={selectedPatient}
+        onPatientUpdated={handlePatientUpdated}
+      />
+
       {/* Create New Patient Modal */}
       <Dialog open={createModalOpen} onClose={() => setCreateModalOpen(false)} className="fixed z-50 inset-0 overflow-y-auto">
         <div className="flex items-center justify-center min-h-screen">
@@ -224,6 +160,7 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, onLogout }) => {
           </div>
         </div>
       </Dialog>
+
       {/* Header */}
       <header className="w-full bg-white shadow-sm border-b-4 border-green-500 flex items-center justify-between px-8 py-4 gap-8">
         <div className="flex items-center gap-3">
@@ -252,24 +189,24 @@ const Dashboard: React.FC<DashboardProps> = ({ userId, onLogout }) => {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-8">
         {/* Welcome Section */}
-      <div className="flex justify-center my-8">
-        <div className="w-full max-w-2xl bg-gradient-to-r from-green-400 to-green-600 border-2 border-white rounded-2xl shadow-lg p-8 flex items-center gap-6">
-          <div className="flex items-center justify-center w-20 h-20 rounded-full bg-white border-4 border-green-200">
-            <span className="text-3xl font-bold text-green-600">
-              {loading ? '...' : name.charAt(0).toUpperCase()}
-            </span>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-white mb-1">
-              {loading ? 'Loading...' : `Welcome, Dr. ${name}`}
+        <div className="flex justify-center my-8">
+          <div className="w-full max-w-2xl bg-gradient-to-r from-green-400 to-green-600 border-2 border-white rounded-2xl shadow-lg p-8 flex items-center gap-6">
+            <div className="flex items-center justify-center w-20 h-20 rounded-full bg-white border-4 border-green-200">
+              <span className="text-3xl font-bold text-green-600">
+                {loading ? '...' : name.charAt(0).toUpperCase()}
+              </span>
             </div>
-            <div className="text-white/90 text-lg">
-              {loading ? 'Fetching your profile...' : 'Ready to analyze chest X-rays with AI-powered diagnostics'}
+            <div>
+              <div className="text-2xl font-bold text-white mb-1">
+                {loading ? 'Loading...' : `Welcome, Dr. ${name}`}
+              </div>
+              <div className="text-white/90 text-lg">
+                {loading ? 'Fetching your profile...' : 'Ready to analyze chest X-rays with AI-powered diagnostics'}
+              </div>
+              {error && <p className="text-red-500 mt-2">{error}</p>}
             </div>
-            {error && <p className="text-red-500 mt-2">{error}</p>}
           </div>
         </div>
-      </div>
 
         {/* Main Dashboard Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
