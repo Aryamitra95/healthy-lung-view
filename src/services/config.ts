@@ -7,5 +7,6 @@ export const awsConfig = {
 };
 
 export const tableNames = { 
-    users: import.meta.env.VITE_DYNAMODB_TABLE_NAME || 'users'
+    users: import.meta.env.VITE_DYNAMODB_TABLE_NAME || 'users',
+    patients: import.meta.env.VITE_PATIENTS_TABLE || 'Patients'
 };

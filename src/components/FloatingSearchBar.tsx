@@ -1,6 +1,4 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { docClient } from '@/services/dynamodb';
-import { ScanCommand } from '@aws-sdk/lib-dynamodb';
 
 interface Patient {
   patientId: string;
@@ -31,19 +29,18 @@ const FloatingSearchBar: React.FC<FloatingSearchBarProps> = ({ onSelect }) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       try {
-        const tableName = import.meta.env.VITE_PATIENTS_TABLE || 'Patients';
-        const scanResult = await docClient.send(
-          new ScanCommand({
-            TableName: tableName,
-            FilterExpression: 'contains(#name, :q)',
-            ExpressionAttributeNames: { '#name': 'name' },
-            ExpressionAttributeValues: { ':q': query },
-            Limit: 10,
-          })
-        );
-        setResults((scanResult.Items as Patient[]) || []);
-        setShowDropdown(true);
+        const response = await fetch(`/api/search-patients?q=${encodeURIComponent(query)}`);
+        if (response.ok) {
+          const data = await response.json();
+          setResults(data);
+          setShowDropdown(true);
+        } else {
+          console.error('Failed to search patients:', response.statusText);
+          setResults([]);
+          setShowDropdown(false);
+        }
       } catch (err) {
+        console.error('Error searching patients:', err);
         setResults([]);
         setShowDropdown(false);
       } finally {
