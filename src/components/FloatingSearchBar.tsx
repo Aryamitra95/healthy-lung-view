@@ -1,7 +1,12 @@
 
 import React, { useState } from 'react';
+import { FiSearch, FiAlertTriangle } from 'react-icons/fi';
 
-const FloatingSearchBar: React.FC = () => {
+interface FloatingSearchBarProps {
+  onPatientSelect: (patientId: string) => void;
+}
+
+const FloatingSearchBar: React.FC<FloatingSearchBarProps> = ({ onPatientSelect }) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<any[]>([]);
   const [error, setError] = useState('');
@@ -70,28 +75,61 @@ const FloatingSearchBar: React.FC = () => {
   };
 
   return (
-    <div style={{ position: 'relative', width: 400, margin: '0 auto' }}>
-      <input
-        type="text"
-        value={query}
-        onChange={e => setQuery(e.target.value)}
-        onKeyDown={handleInputKeyDown}
-        placeholder="Search patients by name or userId"
-        style={{ width: '100%', padding: '8px', fontSize: '16px' }}
-      />
-      <button onClick={handleSearch} disabled={loading} style={{ marginLeft: 8 }}>
-        {loading ? 'Searching...' : 'Search'}
-      </button>
-      {error && <div style={{ color: 'red', marginTop: 8 }}>{error}</div>}
-      {results.length > 0 && (
-        <ul style={{ marginTop: 8, background: '#fff', border: '1px solid #ccc', borderRadius: 4 }}>
-          {results.map((patient, idx) => (
-            <li key={patient.PatientID || patient.userId || idx} style={{ padding: 8, borderBottom: '1px solid #eee' }}>
-              <strong>{patient.name || patient.userId}</strong> {patient.PatientID ? `(ID: ${patient.PatientID})` : patient.userId ? `(UserID: ${patient.userId})` : ''}
-            </li>
-          ))}
-        </ul>
+    <div className="w-full max-w-[600px] mx-auto flex flex-col items-center px-2">
+      <div className="relative w-full flex items-center">
+        <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-green-600 opacity-80 text-xl pointer-events-none" />
+        <input
+          type="text"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={handleInputKeyDown}
+          placeholder="Search patients by name or userId"
+          className="w-full pl-12 pr-4 py-4 border-2 border-green-600 rounded-lg outline-none text-lg transition-all duration-200 focus:ring-2 focus:ring-green-400 focus:border-green-700 bg-white"
+        />
+        <button
+          onClick={handleSearch}
+          disabled={loading}
+          className="ml-3 px-5 py-3 bg-green-600 text-white rounded-lg font-semibold text-base flex items-center transition-all duration-200 hover:bg-green-700 focus:bg-green-700 disabled:opacity-70 disabled:cursor-not-allowed"
+        >
+          Search
+          {loading && (
+            <span className="ml-2 inline-block w-5 h-5 border-2 border-green-200 border-t-green-600 rounded-full animate-spin"></span>
+          )}
+        </button>
+      </div>
+      {error && (
+        <div className="flex items-center gap-2 text-red-600 mt-3 font-medium text-base transition-opacity duration-200">
+          <FiAlertTriangle className="text-xl" />
+          {error}
+        </div>
       )}
+      <div className="w-full mt-5 flex flex-col gap-3">
+        {results.length > 0 && (
+          <ul>
+            {results.map((patient, idx) => {
+              const id = patient.PatientID || patient.userId;
+              return (
+                <li
+                  key={id || idx}
+                  className="cursor-pointer text-green-600 hover:underline bg-white rounded-xl shadow-md p-5 border border-green-100 transition-all duration-200 mb-3"
+                  onClick={() => onPatientSelect(id)}
+                >
+                  <strong className="text-green-700 text-lg">
+                    {patient.name || patient.userId}
+                  </strong>
+                  <div className="text-gray-700 mt-1">
+                    {patient.PatientID
+                      ? `ID: ${patient.PatientID}`
+                      : patient.userId
+                      ? `UserID: ${patient.userId}`
+                      : ''}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
     </div>
   );
 };

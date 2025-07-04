@@ -59,6 +59,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [patientModalOpen, setPatientModalOpen] = useState(false);
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [searchError, setSearchError] = useState('');
 
   useEffect(() => {
     const fetchName = async () => {
@@ -125,10 +126,18 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
     }
   };
 
-  const handlePatientSelect = (patient: Patient) => {
-    console.log('Selected patient:', patient);
-    setSelectedPatient(patient);
-    setPatientModalOpen(true);
+  const handlePatientSelect = async (patientId: string) => {
+    setSearchError('');
+    try {
+      const res = await fetch(`/api/patient/${encodeURIComponent(patientId)}`);
+      if (!res.ok) throw new Error('Failed to fetch patient details');
+      const fullData = await res.json();
+      setSelectedPatient(fullData);
+      setPatientModalOpen(true);
+    } catch (err) {
+      console.error('Failed to fetch patient details:', err);
+      setSearchError('Failed to fetch patient details.');
+    }
   };
 
   const handlePatientUpdated = (updatedPatient: Patient) => {
@@ -138,7 +147,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
 
   return (
     <div className="min-h-screen medical-bg">
-      <FloatingSearchBar/>
+      
       
       {/* Patient Details Modal */}
       <PatientDetailsModal
@@ -167,8 +176,11 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
           </div>
           <span className="text-2xl font-bold text-green-700 tracking-tight">Lung Lens</span>
         </div>
+        <div className="flex justify-center gap-3">
+          <FloatingSearchBar onPatientSelect={handlePatientSelect} />
+        </div>
         <div className="flex gap-4">
-        <Button
+          <Button
             className="bg-green-600 text-white font-semibold px-6 py-2 rounded shadow hover:bg-green-700"
             onClick={() => setCreateModalOpen(true)}
           >
@@ -181,10 +193,9 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
           >
             <LogOut className="w-5 h-5 mr-2" /> Logout
           </Button>
-          
         </div>
       </header>
-
+      {searchError && <div className="text-red-600 text-center mt-2">{searchError}</div>}
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-8">
         {/* Welcome Section */}
