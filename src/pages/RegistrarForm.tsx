@@ -6,17 +6,20 @@ import { PutCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { v4 as uuidv4 } from 'uuid';
 import { LogOut, Stethoscope, User as UserIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import FloatingSearchBar from '../components/FloatingSearchBar';
+import { Dialog } from '@headlessui/react';
+import PatientForm from './PatientForm';
 
 const symptomsList = [
-  { key: 'coughMoreThanThreeWeek', label: 'Cough (more than three weeks)' },
-  { key: 'fever', label: 'Fever' },
-  { key: 'sweating', label: 'Sweating' },
-  { key: 'smoking', label: 'Smoking' },
-  { key: 'chestPain', label: 'Chest Pain' },
-  { key: 'shortnessOfBreathe', label: 'Shortness of Breath' },
-] as const;
+  'Cough (more than three weeks)',
+  'Fever',
+  'Sweating',
+  'Smoking',
+  'Chest Pain',
+  'Shortness of Breath',
+];
 
-type SymptomKey = typeof symptomsList[number]['key'];
+type SymptomKey = typeof symptomsList[number];
 
 interface RegistrarFormProps {
   userId: string;
@@ -24,8 +27,8 @@ interface RegistrarFormProps {
 }
 
 const RegistrarForm: React.FC<RegistrarFormProps> = ({ userId, onLogout }) => {
-  const [selected, setSelected] = useState<Record<SymptomKey, boolean>>(
-    Object.fromEntries(symptomsList.map(s => [s.key, false])) as any
+  const [selected, setSelected] = useState<Record<string, boolean>>(
+    Object.fromEntries(symptomsList.map(s => [s, false])) as any
   );
   const [name, setName] = useState('');
   const [sex, setSex] = useState('');
@@ -36,6 +39,13 @@ const RegistrarForm: React.FC<RegistrarFormProps> = ({ userId, onLogout }) => {
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileError, setProfileError] = useState('');
   const navigate = useNavigate();
+  const [selectedPatient, setSelectedPatient] = useState(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editPatient, setEditPatient] = useState(null);
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [editSuccess, setEditSuccess] = useState('');
+  const [createModalOpen, setCreateModalOpen] = useState(false);
 
   useEffect(() => {
     const fetchName = async () => {
@@ -65,6 +75,44 @@ const RegistrarForm: React.FC<RegistrarFormProps> = ({ userId, onLogout }) => {
     setSelected(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
+  const handlePatientSelect = (patient) => {
+    setSelectedPatient(patient);
+    setEditPatient({ ...patient });
+    setModalOpen(true);
+  };
+
+  const handleEditChange = (field, value) => {
+    setEditPatient((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleEditSymptomToggle = (symptom) => {
+    setEditPatient((prev) => ({
+      ...prev,
+      symptoms: prev.symptoms?.includes(symptom)
+        ? prev.symptoms.filter((s) => s !== symptom)
+        : [...(prev.symptoms || []), symptom],
+    }));
+  };
+
+  const handleEditSave = async () => {
+    setEditLoading(true);
+    setEditError('');
+    setEditSuccess('');
+    try {
+      const patientsTableName = import.meta.env.VITE_PATIENTS_TABLE || 'Patients';
+      await docClient.send(
+        new PutCommand({ TableName: patientsTableName, Item: editPatient })
+      );
+      setEditSuccess('Patient updated successfully!');
+      setSelectedPatient(editPatient);
+      setTimeout(() => setModalOpen(false), 1000);
+    } catch (err) {
+      setEditError('Failed to update patient.');
+    } finally {
+      setEditLoading(false);
+    }
+  };
+
   const handleSubmit = async () => {
     setSuccess('');
     setError('');
@@ -74,8 +122,9 @@ const RegistrarForm: React.FC<RegistrarFormProps> = ({ userId, onLogout }) => {
     }
     setLoading(true);
     try {
+      const patientsTableName = import.meta.env.VITE_PATIENTS_TABLE || 'Patients';
       const patientId = uuidv4();
-      const symptoms = Object.keys(selected).filter(key => selected[key as SymptomKey]);
+      const symptoms = Object.keys(selected).filter(key => selected[key as string]);
       const item = {
         patientId,
         name,
@@ -84,12 +133,12 @@ const RegistrarForm: React.FC<RegistrarFormProps> = ({ userId, onLogout }) => {
         symptoms,
         createdAt: new Date().toISOString(),
       };
-      await docClient.send(new PutCommand({ TableName: 'Patients', Item: item }));
+      await docClient.send(new PutCommand({ TableName: patientsTableName, Item: item }));
       setSuccess('Patient record created successfully!');
       setName('');
       setSex('');
       setAge('');
-      setSelected(Object.fromEntries(symptomsList.map(s => [s.key, false])) as any);
+      setSelected(Object.fromEntries(symptomsList.map(s => [s, false])) as any);
     } catch (err) {
       setError('Failed to create patient record.');
       console.error(err);
@@ -100,21 +149,94 @@ const RegistrarForm: React.FC<RegistrarFormProps> = ({ userId, onLogout }) => {
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col">
+      <FloatingSearchBar onSelect={handlePatientSelect} />
+      <Dialog open={modalOpen} onClose={() => setModalOpen(false)} className="fixed z-50 inset-0 overflow-y-auto">
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="fixed inset-0 bg-black bg-opacity-30" aria-hidden="true" />
+          <div className="relative bg-white rounded-xl shadow-xl p-8 w-full max-w-lg z-10">
+            <Dialog.Title className="text-xl font-bold mb-4">Edit Patient</Dialog.Title>
+            {editPatient && (
+              <form onSubmit={e => { e.preventDefault(); handleEditSave(); }}>
+                <div className="mb-2">
+                  <label className="block font-medium">Name:</label>
+                  <input className="w-full border rounded p-2" value={editPatient.name} onChange={e => handleEditChange('name', e.target.value)} />
+                </div>
+                <div className="mb-2">
+                  <label className="block font-medium">Age:</label>
+                  <input className="w-full border rounded p-2" type="number" value={editPatient.age} onChange={e => handleEditChange('age', Number(e.target.value))} />
+                </div>
+                <div className="mb-2">
+                  <label className="block font-medium">Sex:</label>
+                  <select className="w-full border rounded p-2" value={editPatient.sex || ''} onChange={e => handleEditChange('sex', e.target.value)}>
+                    <option value="">Select</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div className="mb-2">
+                  <label className="block font-medium">Symptoms:</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {symptomsList.map(symptom => (
+                      <label key={symptom} className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={editPatient.symptoms?.includes(symptom) || false}
+                          onChange={() => handleEditSymptomToggle(symptom)}
+                        />
+                        <span>{symptom}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                {editError && <div className="text-red-600 mt-2">{editError}</div>}
+                {editSuccess && <div className="text-green-600 mt-2">{editSuccess}</div>}
+                <div className="flex gap-4 mt-6">
+                  <button type="submit" className="px-4 py-2 bg-green-600 text-white rounded" disabled={editLoading}>
+                    {editLoading ? 'Saving...' : 'Save'}
+                  </button>
+                  <button type="button" className="px-4 py-2 bg-gray-300 text-gray-800 rounded" onClick={() => setModalOpen(false)}>
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      </Dialog>
+      {/* Create New Patient Modal */}
+      <Dialog open={createModalOpen} onClose={() => setCreateModalOpen(false)} className="fixed z-50 inset-0 overflow-y-auto">
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="fixed inset-0 bg-black bg-opacity-30" aria-hidden="true" />
+          <div className="relative bg-white rounded-xl shadow-xl p-8 w-full max-w-3xl z-10">
+            <Dialog.Title className="text-2xl font-bold mb-4">Create New Patient</Dialog.Title>
+            <PatientForm onCancel={() => setCreateModalOpen(false)} />
+          </div>
+        </div>
+      </Dialog>
       {/* Header */}
-      <header className="w-full bg-white shadow-sm border-b-4 border-green-500 flex items-center justify-between px-8">
+      <header className="w-full bg-white shadow-sm border-b-4 border-green-500 flex items-center justify-between px-8 py-4">
         <div className="flex items-center gap-3">
-          <div className="bg-green-100 rounded-xl">
+          <div className="bg-green-100 p-2 rounded-xl">
             <Stethoscope className="w-8 h-8 text-green-600" />
           </div>
           <span className="text-2xl font-bold text-green-700 tracking-tight">Lung Lens</span>
         </div>
-        <Button
-          variant="outline"
-          className="border-green-500 text-green-700 hover:bg-green-50 hover:border-green-700 font-semibold"
-          onClick={onLogout}
-        >
-          <LogOut className="w-5 h-5 mr-2" /> Logout
-        </Button>
+        <div className="flex gap-4">
+          <Button
+            variant="outline"
+            className="border-green-500 text-green-700 hover:bg-green-50 hover:border-green-700 font-semibold"
+            onClick={onLogout}
+          >
+            <LogOut className="w-5 h-5 mr-2" /> Logout
+          </Button>
+          <Button
+            className="bg-green-600 text-white font-semibold px-6 py-2 rounded shadow hover:bg-green-700"
+            onClick={() => setCreateModalOpen(true)}
+          >
+            + Create New Patient
+          </Button>
+        </div>
       </header>
 
       {/* Welcome Section */}
@@ -171,12 +293,12 @@ const RegistrarForm: React.FC<RegistrarFormProps> = ({ userId, onLogout }) => {
           <div className="mb-6">
             <div className="grid grid-cols-2 gap-4">
               {symptomsList.map(s => (
-                <label key={s.key} className="flex items-center gap-2 bg-white rounded-md px-3 py-2 border border-green-100">
+                <label key={s} className="flex items-center gap-2 bg-white rounded-md px-3 py-2 border border-green-100">
                   <Checkbox
-                    checked={selected[s.key]}
-                    onCheckedChange={() => handleToggle(s.key)}
+                    checked={selected[s as string]}
+                    onCheckedChange={() => handleToggle(s as SymptomKey)}
                   />
-                  <span className="text-green-900 text-base">{s.label}</span>
+                  <span className="text-green-900 text-base">{s}</span>
                 </label>
               ))}
             </div>
