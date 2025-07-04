@@ -80,7 +80,7 @@ const PatientForm: React.FC<PatientFormProps> = ({ onSuccess, onCancel }) => {
         />
         <div className="flex gap-4">
           <select
-            className="border border-green-300 rounded-md p-3 w-1/2 focus:outline-none focus:ring-2 focus:ring-green-400 text-lg"
+            className="border border-green-300 rounded-md p-3 w-1/2 focus:outline-none focus:ring-2 focus:ring-green-400 text-lg text-black/30"
             value={sex}
             onChange={e => setSex(e.target.value)}
           >

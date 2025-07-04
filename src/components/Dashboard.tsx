@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,17 +15,11 @@ import PatientDetailsModal from './PatientDetailsModal';
 import { Dialog } from '@headlessui/react';
 import RegistrarForm from '../pages/RegistrarForm';
 import PatientForm from '../pages/PatientForm';
+import type { HFSpaceResponse } from '@/services/api';
 
 interface DashboardProps {
   username: string;
   onLogout: () => void;
-}
-
-interface PredictionData {
-  healthy: number;
-  tuberculosis: number;
-  pneumonia: number;
-  prediction: string;
 }
 
 interface ReportData {
@@ -59,7 +52,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const navigate = useNavigate();
-  const [prediction, setPrediction] = useState<PredictionData | null>(null);
+  const [prediction, setPrediction] = useState<HFSpaceResponse | null>(null);
   const [report, setReport] = useState<ReportData | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
@@ -96,7 +89,7 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
     window.location.href = '/login';
   };
 
-  const handlePredictionReceived = (predictionData: PredictionData) => {
+  const handlePredictionReceived = (predictionData: HFSpaceResponse) => {
     setPrediction(predictionData);
     setReport(null); // Reset report when new prediction is received
     setReportError(null); // Reset error when new prediction is received
@@ -109,7 +102,12 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
       setIsGeneratingReport(true);
       setReportError(null); // Clear any previous errors
       
-      const generatedReport = await generateMedicalReport(prediction);
+      const generatedReport = await generateMedicalReport({
+        healthy: Number(prediction.healthy_score) || 0,
+        tuberculosis: Number(prediction.tb_score) || 0,
+        pneumonia: Number(prediction.pneumonia_score) || 0,
+        prediction: prediction.word || "",
+      });
       
       if (generatedReport) {
         setReport(generatedReport);
@@ -232,6 +230,17 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
             />
           </div>
         </div>
+
+        {/* Display uploaded image if available
+        {prediction?.imageUrl && (
+          <div className="flex justify-center my-4">
+            <img
+              src={prediction.imageUrl}
+              alt="Uploaded X-ray"
+              className="max-h-80 rounded-lg border-2 border-medical-green-light shadow-md"
+            />
+          </div>
+        )} */}
 
         {/* Report Section */}
         <div>

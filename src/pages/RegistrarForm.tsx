@@ -166,7 +166,7 @@ const RegistrarForm: React.FC<RegistrarFormProps> = ({ userId, onLogout }) => {
                   <input className="w-full border rounded p-2" type="number" value={editPatient.age} onChange={e => handleEditChange('age', Number(e.target.value))} />
                 </div>
                 <div className="mb-2">
-                  <label className="block font-medium">Sex:</label>
+                  <label className="block font-medium ">Sex:</label>
                   <select className="w-full border rounded p-2" value={editPatient.sex || ''} onChange={e => handleEditChange('sex', e.target.value)}>
                     <option value="">Select</option>
                     <option value="Male">Male</option>
@@ -275,7 +275,6 @@ const RegistrarForm: React.FC<RegistrarFormProps> = ({ userId, onLogout }) => {
                 value={sex}
                 onChange={e => setSex(e.target.value)}
               >
-                <option value="">Sex</option>
                 <option value="Male">Male</option>
                 <option value="Female">Female</option>
                 <option value="Other">Other</option>

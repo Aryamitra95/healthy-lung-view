@@ -1,8 +1,10 @@
 export interface HFSpaceResponse {
+
   word: string;
-  healthy_score: number;
-  tb_score: number;
-  pneumonia_score: number;
+  healthy_score: string;
+  tb_score: string;
+  pneumonia_score: string;
+  imageUrl: string;
 }
 
 export interface PredictionData {
@@ -18,7 +20,7 @@ const RETRY_LIMIT = 2;
 export const uploadImageToHFSpace = async (
   file: File,
   retry = 0
-): Promise<PredictionData> => {
+): Promise<HFSpaceResponse> => {
   const formData = new FormData();
   formData.append('image', file);
 
@@ -32,13 +34,21 @@ export const uploadImageToHFSpace = async (
       throw new Error(`HF Space API error: ${response.status}`);
     }
 
-    const data: HFSpaceResponse = await response.json();
-
+    const word = response.headers.get('word') || '';
+    const healthy_score = Number(response.headers.get('healthy_score') || '0');
+    console.log('healthy_score', response.headers.get('healthy_score'));
+    const tb_score = Number(response.headers.get('tb_score') || '0');
+    const pneumonia_score =Number(response.headers.get('pneumonia_score') || '0');
+  
+    // Get the image blob and convert to URL
+    const blob = await response.blob();
+    const imageUrl = URL.createObjectURL(blob);
     return {
-      healthy: data.healthy_score,
-      tuberculosis: data.tb_score,
-      pneumonia: data.pneumonia_score,
-      prediction: data.word,
+      word,
+    healthy_score,
+    tb_score,
+    pneumonia_score,
+    imageUrl,
     };
   } catch (error: any) {
     if (retry < RETRY_LIMIT) {
