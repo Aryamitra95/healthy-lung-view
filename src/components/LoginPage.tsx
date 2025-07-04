@@ -87,11 +87,9 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     setIsLoading(true);
     setError('');
     try {
-      // Authenticate with DynamoDB (now includes userType)
       const result = await authenticateUser(username, userType, password);
       if (result.success) {
-        localStorage.setItem('user', JSON.stringify(result.user));
-        onLogin(result.user);
+        onLogin(result.user.userID); // Only pass userID up
         if (result.user.userType === 'doctor') {
           console.log('Redirecting to /doctor');
           navigate('/doctor');

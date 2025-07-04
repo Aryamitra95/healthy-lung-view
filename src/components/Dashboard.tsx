@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -8,9 +8,12 @@ import FileUpload from './FileUpload';
 import PredictionDisplay from './PredictionDisplay';
 import ReportDisplay from './ReportDisplay';
 import { generateMedicalReport } from '@/services/medicalReportService';
+import { docClient } from '@/services/dynamodb';
+import { GetCommand } from '@aws-sdk/lib-dynamodb';
+import { useNavigate } from 'react-router-dom';
 
 interface DashboardProps {
-  username: string;
+  userId: string;
   onLogout: () => void;
 }
 
@@ -27,13 +30,40 @@ interface ReportData {
   suggestedActions: string;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
+const Dashboard: React.FC<DashboardProps> = ({ userId, onLogout }) => {
+  const [name, setName] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const navigate = useNavigate();
   const [prediction, setPrediction] = useState<PredictionData | null>(null);
   const [report, setReport] = useState<ReportData | null>(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
 
-  
+  useEffect(() => {
+    const fetchName = async () => {
+      setLoading(true);
+      setError('');
+      const trimmedUserId = userId.trim();
+      console.log('Fetching user profile:', { userID: trimmedUserId, table: import.meta.env.VITE_DYNAMODB_TABLE_NAME });
+      try {
+        const result = await docClient.send(new GetCommand({ TableName: import.meta.env.VITE_DYNAMODB_TABLE_NAME, Key: { userID: trimmedUserId } }));
+        if (!result.Item || !result.Item.userName) {
+          setError('User not found.');
+          setTimeout(() => navigate('/login', { replace: true }), 1500);
+          return;
+        }
+        setName(result.Item.userName);
+      } catch (err) {
+        setError('Failed to fetch user profile.');
+        setTimeout(() => navigate('/login', { replace: true }), 1500);
+      } finally {
+        setLoading(false);
+      }
+    };
+    if (userId) fetchName();
+  }, [userId, navigate]);
+
   const handleLogout = () => {
     localStorage.removeItem('user');
     window.location.href = '/login';
@@ -92,16 +122,21 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-8">
         {/* Welcome Section */}
-      <div className="flex justify-center mt-8">
+      <div className="flex justify-center my-8">
         <div className="w-full max-w-2xl bg-gradient-to-r from-green-400 to-green-600 border-2 border-white rounded-2xl shadow-lg p-8 flex items-center gap-6">
           <div className="flex items-center justify-center w-20 h-20 rounded-full bg-white border-4 border-green-200">
             <span className="text-3xl font-bold text-green-600">
-              {username.charAt(0).toUpperCase()}
+              {loading ? '...' : name.charAt(0).toUpperCase()}
             </span>
           </div>
           <div>
-            <div className="text-2xl font-bold text-white mb-1">Welcome, Dr. {username}</div>
-            <div className="text-white/90 text-lg">Ready to analyze chest X-rays with AI-powered diagnostics</div>
+            <div className="text-2xl font-bold text-white mb-1">
+              {loading ? 'Loading...' : `Welcome, Dr. ${name}`}
+            </div>
+            <div className="text-white/90 text-lg">
+              {loading ? 'Fetching your profile...' : 'Ready to analyze chest X-rays with AI-powered diagnostics'}
+            </div>
+            {error && <p className="text-red-500 mt-2">{error}</p>}
           </div>
         </div>
       </div>

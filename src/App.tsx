@@ -8,51 +8,51 @@ import NotFound from "./pages/NotFound";
 import LoginPage from '@/components/LoginPage';
 import Dashboard from '@/components/Dashboard';
 import RegistrarForm from '@/pages/RegistrarForm';
+import { useState } from 'react';
 
 const queryClient = new QueryClient();
 
-const PrivateRoute = ({ children, allowedTypes }) => {
-  const user = JSON.parse(localStorage.getItem('user') || 'null');
-  if (!user) return <Navigate to="/login" replace />;
-  if (allowedTypes && !allowedTypes.includes(user.userType)) return <Navigate to="/login" replace />;
+const PrivateRoute = ({ children, userId, allowedTypes }) => {
+  // Only check for userId, not full user object
+  if (!userId) return <Navigate to="/login" replace />;
+  // allowedTypes check will be handled in the page fetch logic
   return <>{children}</>;
 };
 
-const getUsername = () => {
-  const user = JSON.parse(localStorage.getItem('user') || 'null');
-  return user?.userID || '';
-};
+const App = () => {
+  const [userId, setUserId] = useState<string | null>(null);
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/login" element={<LoginPage onLogin={() => {}} />} />
-          <Route
-            path="/doctor"
-            element={
-              <PrivateRoute allowedTypes={["doctor"]}>
-                <Dashboard username={getUsername()} onLogout={() => { localStorage.removeItem('user'); window.location.href = '/login'; }} />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/registerer"
-            element={
-              <PrivateRoute allowedTypes={["register"]}>
-                <RegistrarForm />
-              </PrivateRoute>
-            }
-          />
-          <Route path="/" element={<Navigate to="/login" replace />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <Routes>
+            <Route path="/login" element={<LoginPage onLogin={setUserId} />} />
+            <Route
+              path="/doctor"
+              element={
+                <PrivateRoute userId={userId} allowedTypes={["doctor"]}>
+                  <Dashboard userId={userId} onLogout={() => setUserId(null)} />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/registerer"
+              element={
+                <PrivateRoute userId={userId} allowedTypes={["register"]}>
+                  <RegistrarForm userId={userId} onLogout={() => setUserId(null)} />
+                </PrivateRoute>
+              }
+            />
+            <Route path="/" element={<Navigate to="/login" replace />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;

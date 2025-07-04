@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { docClient } from '@/services/dynamodb';
-import { PutCommand } from '@aws-sdk/lib-dynamodb';
+import { PutCommand, GetCommand } from '@aws-sdk/lib-dynamodb';
 import { v4 as uuidv4 } from 'uuid';
 import { LogOut, Stethoscope, User as UserIcon } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const symptomsList = [
   { key: 'coughMoreThanThreeWeek', label: 'Cough (more than three weeks)' },
@@ -17,17 +18,12 @@ const symptomsList = [
 
 type SymptomKey = typeof symptomsList[number]['key'];
 
-const username = (() => {
-  const user = JSON.parse(localStorage.getItem('user') || 'null');
-  return user?.userID || 'Doctor';
-})();
+interface RegistrarFormProps {
+  userId: string;
+  onLogout: () => void;
+}
 
-const handleLogout = () => {
-  localStorage.removeItem('user');
-  window.location.href = '/login';
-};
-
-const RegistrarForm: React.FC = () => {
+const RegistrarForm: React.FC<RegistrarFormProps> = ({ userId, onLogout }) => {
   const [selected, setSelected] = useState<Record<SymptomKey, boolean>>(
     Object.fromEntries(symptomsList.map(s => [s.key, false])) as any
   );
@@ -37,6 +33,33 @@ const RegistrarForm: React.FC = () => {
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileError, setProfileError] = useState('');
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchName = async () => {
+      setProfileLoading(true);
+      setProfileError('');
+      const trimmedUserId = userId.trim();
+      console.log('Fetching user profile:', { userID: trimmedUserId, table: import.meta.env.VITE_DYNAMODB_TABLE_NAME });
+      try {
+        const result = await docClient.send(new GetCommand({ TableName: import.meta.env.VITE_DYNAMODB_TABLE_NAME, Key: { userID: trimmedUserId } }));
+        if (!result.Item || !result.Item.userName) {
+          setProfileError('User not found.');
+          setTimeout(() => navigate('/login', { replace: true }), 1500);
+          return;
+        }
+        setName(result.Item.userName);
+      } catch (err) {
+        setProfileError('Failed to fetch user profile.');
+        setTimeout(() => navigate('/login', { replace: true }), 1500);
+      } finally {
+        setProfileLoading(false);
+      }
+    };
+    if (userId) fetchName();
+  }, [userId, navigate]);
 
   const handleToggle = (key: SymptomKey) => {
     setSelected(prev => ({ ...prev, [key]: !prev[key] }));
@@ -78,9 +101,9 @@ const RegistrarForm: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col">
       {/* Header */}
-      <header className="w-full bg-white shadow-sm border-b-4 border-green-500 flex items-center justify-between px-8 py-4">
+      <header className="w-full bg-white shadow-sm border-b-4 border-green-500 flex items-center justify-between px-8">
         <div className="flex items-center gap-3">
-          <div className="bg-green-100 p-2 rounded-xl">
+          <div className="bg-green-100 rounded-xl">
             <Stethoscope className="w-8 h-8 text-green-600" />
           </div>
           <span className="text-2xl font-bold text-green-700 tracking-tight">Lung Lens</span>
@@ -88,23 +111,28 @@ const RegistrarForm: React.FC = () => {
         <Button
           variant="outline"
           className="border-green-500 text-green-700 hover:bg-green-50 hover:border-green-700 font-semibold"
-          onClick={handleLogout}
+          onClick={onLogout}
         >
           <LogOut className="w-5 h-5 mr-2" /> Logout
         </Button>
       </header>
 
       {/* Welcome Section */}
-      <div className="flex justify-center mt-8">
+      <div className="flex justify-center items-center my-8 w-full">
         <div className="w-full max-w-2xl bg-gradient-to-r from-green-400 to-green-600 border-2 border-white rounded-2xl shadow-lg p-8 flex items-center gap-6">
           <div className="flex items-center justify-center w-20 h-20 rounded-full bg-white border-4 border-green-200">
             <span className="text-3xl font-bold text-green-600">
-              {username.charAt(0).toUpperCase()}
+              {profileLoading ? '...' : name.charAt(0).toUpperCase()}
             </span>
           </div>
           <div>
-            <div className="text-2xl font-bold text-white mb-1">Welcome, {username}</div>
-            <div className="text-white/90 text-lg">Ready to analyze chest X-rays with AI-powered diagnostics</div>
+            <div className="text-2xl font-bold text-white mb-1">
+              {profileLoading ? 'Loading...' : `Welcome, ${name}`}
+            </div>
+            <div className="text-white/90 text-lg">
+              {profileLoading ? 'Fetching your profile...' : 'Ready to analyze chest X-rays with AI-powered diagnostics'}
+            </div>
+            {profileError && <p className="text-red-500 mt-2">{profileError}</p>}
           </div>
         </div>
       </div>
@@ -117,7 +145,6 @@ const RegistrarForm: React.FC = () => {
             <input
               className="border border-green-300 rounded-md p-3 w-full focus:outline-none focus:ring-2 focus:ring-green-400 text-lg"
               placeholder="Name"
-              value={name}
               onChange={e => setName(e.target.value)}
             />
             <div className="flex gap-4">
