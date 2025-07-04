@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import type { HFSpaceResponse } from '@/services/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { FileText } from 'lucide-react';
+import { FileText, Download, Printer } from 'lucide-react';
+import { useReactToPrint } from 'react-to-print';
+import generatePDF from 'react-to-pdf';
 
 interface PredictionDisplayProps {
   prediction: HFSpaceResponse | null;
@@ -22,6 +24,12 @@ const PredictionDisplay: React.FC<PredictionDisplayProps> = ({
   onGenerateReport,
   isGeneratingReport
 }) => {
+  const contentRef = useRef<HTMLDivElement>(null);
+  const handlePrint = useReactToPrint({
+    content: () => contentRef.current,
+    documentTitle: 'Prediction Report',
+  });
+
   if (!prediction) {
     return (
       <Card className="border-2 border-medical-green-light">
@@ -37,7 +45,6 @@ const PredictionDisplay: React.FC<PredictionDisplayProps> = ({
     );
   }
 
-  console.log('Prediction object:', prediction);
   const predictions = [
     { label: 'Healthy', value: safeNumber(prediction.healthy_score), color: 'bg-green-500' },
     { label: 'Tuberculosis', value: safeNumber(prediction.tb_score), color: 'bg-yellow-500' },
@@ -54,9 +61,26 @@ const PredictionDisplay: React.FC<PredictionDisplayProps> = ({
         <CardTitle className="text-medical-green">Prediction</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
-        {predictions.map((pred) => {
-          console.log('Progress value for', pred.label, ':', pred.value, typeof pred.value);
-          return (
+        {/* PDF & Print Buttons only when prediction exists */}
+        <div className="flex gap-2 mb-4">
+          <Button
+            variant="outline"
+            onClick={() => generatePDF(contentRef, { filename: 'prediction.pdf' })}
+            size="sm"
+          >
+            <Download className="w-4 h-4 mr-1" /> Download as PDF
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handlePrint}
+            size="sm"
+          >
+            <Printer className="w-4 h-4 mr-1" /> Print
+          </Button>
+        </div>
+        {/* Main content to export/print */}
+        <div ref={contentRef}>
+          {predictions.map((pred) => (
             <div key={pred.label} className="space-y-2">
               <div className="flex justify-between items-center">
                 <span className="font-medium">{pred.label}:</span>
@@ -67,28 +91,28 @@ const PredictionDisplay: React.FC<PredictionDisplayProps> = ({
                 className="h-2"
               />
             </div>
-          );
-        })}
+          ))}
 
-        <div className="mt-6 p-4 medical-gradient rounded-lg">
-          <p className="text-white text-sm font-medium mb-2">
-            Probable Disease According to AI Diagnosis:
-          </p>
-          <p className="text-white text-2xl font-bold">
-            {prediction.word}
-          </p>
-        </div>
-
-        {prediction.imageUrl && (
-          <div className="flex justify-center my-4">
-            <img
-              src={prediction.imageUrl}
-              alt="Uploaded X-ray"
-              className="max-h-60 rounded-lg border-2 border-medical-green-light shadow-md"
-            />
+          <div className="mt-6 p-4 medical-gradient rounded-lg">
+            <p className="text-white text-sm font-medium mb-2">
+              Probable Disease According to AI Diagnosis:
+            </p>
+            <p className="text-white text-2xl font-bold">
+              {prediction.word}
+            </p>
           </div>
-        )}
 
+          {prediction.imageUrl && (
+            <div className="flex justify-center my-4">
+              <img
+                src={prediction.imageUrl}
+                alt="Uploaded X-ray"
+                className="max-h-60 rounded-lg border-2 border-medical-green-light shadow-md"
+              />
+            </div>
+          )}
+        </div>
+        {/* Generate Report Button */}
         <Button
           onClick={onGenerateReport}
           disabled={isGeneratingReport}
