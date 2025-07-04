@@ -117,12 +117,14 @@ const FileUpload: React.FC<FileUploadProps> = ({ onPredictionReceived }) => {
         <Card className="border-2 border-medical-green-light animate-fade-in">
           <CardContent className="p-4">
             <div className="text-center">
-              <div className="bg-gray-100 rounded-lg p-4 mb-3">
-                <ImageIcon className="w-16 h-16 text-gray-400 mx-auto mb-2" />
+              <div className="bg-gray-100 rounded-lg p-4 mb-3 flex flex-col items-center">
+                <img
+                  src={previewURL}
+                  alt="X-ray Preview"
+                  className="w-auto h-40 object-contain mb-2 rounded"
+                />
                 <p className="text-sm text-gray-600">X-ray Preview</p>
-                <p className="text-xs text-gray-500 mt-1">
-                  {fileName}
-                </p>
+                <p className="text-xs text-gray-500 mt-1">{fileName}</p>
               </div>
             </div>
           </CardContent>

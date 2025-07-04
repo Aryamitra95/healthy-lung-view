@@ -102,7 +102,12 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
       setIsGeneratingReport(true);
       setReportError(null); // Clear any previous errors
       
-      const generatedReport = await generateMedicalReport(prediction);
+      const generatedReport = await generateMedicalReport({
+        healthy: Number(prediction.healthy_score) || 0,
+        tuberculosis: Number(prediction.tb_score) || 0,
+        pneumonia: Number(prediction.pneumonia_score) || 0,
+        prediction: prediction.word || "",
+      });
       
       if (generatedReport) {
         setReport(generatedReport);

@@ -35,9 +35,10 @@ export const uploadImageToHFSpace = async (
     }
 
     const word = response.headers.get('word') || '';
-    const healthy_score = parseFloat(response.headers.get('healthy_score') || '0');
-    const tb_score = parseFloat(response.headers.get('tb_score') || '0');
-    const pneumonia_score = parseFloat(response.headers.get('pneumonia_score') || '0');
+    const healthy_score = Number(response.headers.get('healthy_score') || '0');
+    console.log('healthy_score', response.headers.get('healthy_score'));
+    const tb_score = Number(response.headers.get('tb_score') || '0');
+    const pneumonia_score =Number(response.headers.get('pneumonia_score') || '0');
   
     // Get the image blob and convert to URL
     const blob = await response.blob();
