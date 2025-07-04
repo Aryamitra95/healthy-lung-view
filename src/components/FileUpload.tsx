@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Upload, File, Image as ImageIcon } from 'lucide-react';
-import { uploadImageToHFSpace, PredictionData } from '@/services/api';
+import { uploadImageToHFSpace, PredictionData, HFSpaceResponse} from '@/services/api';
 
 interface FileUploadProps {
-  onPredictionReceived: (prediction: PredictionData) => void;
+  onPredictionReceived: (prediction:HFSpaceResponse) => void;
 }
 
 const FileUpload: React.FC<FileUploadProps> = ({ onPredictionReceived }) => {
