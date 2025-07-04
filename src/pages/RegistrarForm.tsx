@@ -123,10 +123,10 @@ const RegistrarForm: React.FC<RegistrarFormProps> = ({ userId, onLogout }) => {
     setLoading(true);
     try {
       const patientsTableName = import.meta.env.VITE_PATIENTS_TABLE || 'Patients';
-      const patientId = uuidv4();
+      const PatientID = uuidv4();
       const symptoms = Object.keys(selected).filter(key => selected[key as string]);
       const item = {
-        patientId,
+        PatientID,
         name,
         sex,
         age: Number(age),

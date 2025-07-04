@@ -5,13 +5,13 @@ import { docClient } from '@/services/dynamodb';
 import { PutCommand } from '@aws-sdk/lib-dynamodb';
 import { v4 as uuidv4 } from 'uuid';
 
-const symptomsList = [
-  'Cough (more than three weeks)',
-  'Fever',
-  'Sweating',
-  'Smoking',
-  'Chest Pain',
-  'Shortness of Breath',
+const symptomsMap = [
+  { label: 'Cough (more than three weeks)', key: 'coughMoreThanThreeWeek' },
+  { label: 'Fever', key: 'fever' },
+  { label: 'Sweating', key: 'sweating' },
+  { label: 'Smoking', key: 'smoking' },
+  { label: 'Chest Pain', key: 'chestPain' },
+  { label: 'Shortness of Breath', key: 'shortnessOfBreathe' },
 ];
 
 interface PatientFormProps {
@@ -24,14 +24,14 @@ const PatientForm: React.FC<PatientFormProps> = ({ onSuccess, onCancel }) => {
   const [sex, setSex] = useState('');
   const [age, setAge] = useState('');
   const [selected, setSelected] = useState<Record<string, boolean>>(
-    Object.fromEntries(symptomsList.map(s => [s, false])) as any
+    Object.fromEntries(symptomsMap.map(s => [s.key, false]))
   );
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleToggle = (symptom: string) => {
-    setSelected(prev => ({ ...prev, [symptom]: !prev[symptom] }));
+  const handleToggle = (symptomKey: string) => {
+    setSelected(prev => ({ ...prev, [symptomKey]: !prev[symptomKey] }));
   };
 
   const handleSubmit = async () => {
@@ -44,13 +44,12 @@ const PatientForm: React.FC<PatientFormProps> = ({ onSuccess, onCancel }) => {
     setLoading(true);
     try {
       const patientId = uuidv4();
-      const symptoms = Object.keys(selected).filter(key => selected[key]);
       const item = {
-        patientId,
+        PatientID: patientId, // Correct casing for DynamoDB
         name,
         sex,
         age: Number(age),
-        symptoms,
+        ...selected,
         createdAt: new Date().toISOString(),
       };
       const tableName = import.meta.env.VITE_PATIENTS_TABLE || 'Patients';
@@ -59,7 +58,7 @@ const PatientForm: React.FC<PatientFormProps> = ({ onSuccess, onCancel }) => {
       setName('');
       setSex('');
       setAge('');
-      setSelected(Object.fromEntries(symptomsList.map(s => [s, false])) as any);
+      setSelected(Object.fromEntries(symptomsMap.map(s => [s.key, false])));
       if (onSuccess) onSuccess();
     } catch (err) {
       setError('Failed to create patient record.');
@@ -102,13 +101,13 @@ const PatientForm: React.FC<PatientFormProps> = ({ onSuccess, onCancel }) => {
       </div>
       <div className="mb-6">
         <div className="grid grid-cols-2 gap-4">
-          {symptomsList.map(s => (
-            <label key={s} className="flex items-center gap-2 bg-white rounded-md px-3 py-2 border border-green-100">
+          {symptomsMap.map(s => (
+            <label key={s.key} className="flex items-center gap-2 bg-white rounded-md px-3 py-2 border border-green-100">
               <Checkbox
-                checked={selected[s]}
-                onCheckedChange={() => handleToggle(s)}
+                checked={selected[s.key]}
+                onCheckedChange={() => handleToggle(s.key)}
               />
-              <span className="text-green-900 text-base">{s}</span>
+              <span className="text-green-900 text-base">{s.label}</span>
             </label>
           ))}
         </div>
