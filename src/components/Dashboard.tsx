@@ -33,6 +33,12 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [reportError, setReportError] = useState<string | null>(null);
 
+  
+  const handleLogout = () => {
+    localStorage.removeItem('user');
+    window.location.href = '/login';
+  };
+
   const handlePredictionReceived = (predictionData: PredictionData) => {
     setPrediction(predictionData);
     setReport(null); // Reset report when new prediction is received
@@ -67,51 +73,38 @@ const Dashboard: React.FC<DashboardProps> = ({ username, onLogout }) => {
   return (
     <div className="min-h-screen medical-bg">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b-2 border-medical-green-light">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="bg-medical-green p-2 rounded-lg">
-                <Stethoscope className="w-6 h-6 text-white" />
-              </div>
-              <h1 className="text-2xl font-bold text-medical-green">Lung Lens</h1>
-            </div>
-            <Button
-              onClick={onLogout}
-              variant="outline"
-              className="border-medical-green-light hover:bg-medical-green-light"
-            >
-              <LogOut className="w-4 h-4 mr-2" />
-              Logout
-            </Button>
+      <header className="w-full bg-white shadow-sm border-b-4 border-green-500 flex items-center justify-between px-8 py-4 gap-8">
+        <div className="flex items-center gap-3">
+          <div className="bg-green-100 p-2 rounded-xl">
+            <Stethoscope className="w-8 h-8 text-green-600" />
           </div>
+          <span className="text-2xl font-bold text-green-700 tracking-tight">Lung Lens</span>
         </div>
+        <Button
+          variant="outline"
+          className="border-green-500 text-green-700 hover:bg-green-50 hover:border-green-700 font-semibold"
+          onClick={handleLogout}
+        >
+          <LogOut className="w-5 h-5 mr-2" /> Logout
+        </Button>
       </header>
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-6 py-8">
         {/* Welcome Section */}
-        <div className="mb-8">
-          <Card className="border-2 border-medical-green-light medical-gradient">
-            <CardContent className="p-6">
-              <div className="flex items-center space-x-4">
-                <Avatar className="w-16 h-16 border-4 border-white">
-                  <AvatarFallback className="bg-white text-medical-green text-xl font-bold">
-                    {username.charAt(0).toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <h2 className="text-2xl font-bold text-white mb-1">
-                    Welcome, Dr. {username}
-                  </h2>
-                  <p className="text-white/90">
-                    Ready to analyze chest X-rays with AI-powered diagnostics
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+      <div className="flex justify-center mt-8">
+        <div className="w-full max-w-2xl bg-gradient-to-r from-green-400 to-green-600 border-2 border-white rounded-2xl shadow-lg p-8 flex items-center gap-6">
+          <div className="flex items-center justify-center w-20 h-20 rounded-full bg-white border-4 border-green-200">
+            <span className="text-3xl font-bold text-green-600">
+              {username.charAt(0).toUpperCase()}
+            </span>
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-white mb-1">Welcome, Dr. {username}</div>
+            <div className="text-white/90 text-lg">Ready to analyze chest X-rays with AI-powered diagnostics</div>
+          </div>
         </div>
+      </div>
 
         {/* Main Dashboard Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">

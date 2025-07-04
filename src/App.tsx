@@ -8,36 +8,51 @@ import NotFound from "./pages/NotFound";
 import LoginPage from '@/components/LoginPage';
 import Dashboard from '@/components/Dashboard';
 import RegistrarForm from '@/pages/RegistrarForm';
-import { useState } from 'react';
 
 const queryClient = new QueryClient();
 
-const App = () => {
-  const [user, setUser] = useState<any>(null);
-
-  return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/login" element={<LoginPage onLogin={setUser} />} />
-            <Route
-              path="/doctor"
-              element={user?.role === 'doctor' ? <Dashboard /> : <Navigate to="/login" replace />}
-            />
-            <Route
-              path="/registrar"
-              element={user?.role === 'registrar' ? <RegistrarForm /> : <Navigate to="/login" replace />}
-            />
-            <Route path="/" element={<Index />} />
-            <Route path="*" element={<Navigate to="/login" replace />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
-    </QueryClientProvider>
-  );
+const PrivateRoute = ({ children, allowedTypes }) => {
+  const user = JSON.parse(localStorage.getItem('user') || 'null');
+  if (!user) return <Navigate to="/login" replace />;
+  if (allowedTypes && !allowedTypes.includes(user.userType)) return <Navigate to="/login" replace />;
+  return <>{children}</>;
 };
+
+const getUsername = () => {
+  const user = JSON.parse(localStorage.getItem('user') || 'null');
+  return user?.userID || '';
+};
+
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <TooltipProvider>
+      <Toaster />
+      <Sonner />
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<LoginPage onLogin={() => {}} />} />
+          <Route
+            path="/doctor"
+            element={
+              <PrivateRoute allowedTypes={["doctor"]}>
+                <Dashboard username={getUsername()} onLogout={() => { localStorage.removeItem('user'); window.location.href = '/login'; }} />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/registerer"
+            element={
+              <PrivateRoute allowedTypes={["register"]}>
+                <RegistrarForm />
+              </PrivateRoute>
+            }
+          />
+          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </BrowserRouter>
+    </TooltipProvider>
+  </QueryClientProvider>
+);
 
 export default App;
