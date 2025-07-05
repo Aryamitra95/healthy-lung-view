@@ -56,7 +56,7 @@ const tableNames = {
     patients: process.env.VITE_PATIENTS_TABLE || 'Patients'
 };
 
-const S3_BUCKET = process.env.S3_BUCKET_NAME || 'lung-lens-images';
+const S3_BUCKET = process.env.S3_BUCKET_NAME || 'lungsXrays';
 
 const client = new OpenAI({
     baseURL: 'https://api.studio.nebius.com/v1/',
@@ -229,7 +229,81 @@ app.get('/api/download-patient-image', async (req, res) => {
     }
 });
 
-// Create new patient endpoint
+// Create new patient with image upload endpoint
+app.post('/api/create-patient-with-image', upload.single('image'), async (req, res) => {
+    try {
+        const patientData = req.body;
+        const PatientID = uuidv4();
+        const uploadTimestamp = new Date().toISOString();
+        
+        let imageUrl = '';
+        let imageKey = '';
+        
+        // Handle image upload if provided
+        if (req.file) {
+            // Generate unique filename
+            const fileExtension = req.file.originalname.split('.').pop();
+            imageKey = `patient-images/${PatientID}-${uuidv4()}.${fileExtension}`;
+            
+            // Upload to S3 with public read access
+            const uploadParams = {
+                Bucket: S3_BUCKET,
+                Key: imageKey,
+                Body: req.file.buffer,
+                ContentType: req.file.mimetype,
+                ACL: 'public-read'
+            };
+
+            await s3Client.send(new PutObjectCommand(uploadParams));
+            
+            // Generate public URL
+            imageUrl = `https://${S3_BUCKET}.s3.amazonaws.com/${imageKey}`;
+        }
+        
+        // Create patient record with the required schema
+        const newPatient = {
+            PatientID,
+            patientName: patientData.patientName || patientData.name,
+            age: Number(patientData.age),
+            sex: patientData.sex,
+            coughMostThatThreeWeek: patientData.coughMostThatThreeWeek === 'true' || patientData.coughMostThatThreeWeek === true,
+            fever: patientData.fever === 'true' || patientData.fever === true,
+            chestPain: patientData.chestPain === 'true' || patientData.chestPain === true,
+            shortOfBreath: patientData.shortOfBreath === 'true' || patientData.shortOfBreath === true,
+            sweating: patientData.sweating === 'true' || patientData.sweating === true,
+            longInProgressCn: patientData.longInProgressCn || {},
+            L1: patientData.L1 || [],
+            imageUrl,
+            imageKey,
+            uploadTimestamp,
+            // Additional fields from existing form
+            email: patientData.email || '',
+            phone: patientData.phone || '',
+            address: patientData.address || '',
+            symptoms: patientData.symptoms || [],
+            medicalHistory: patientData.medicalHistory || '',
+            allergies: patientData.allergies || '',
+            medications: patientData.medications || '',
+            emergencyContact: patientData.emergencyContact || '',
+            createdAt: uploadTimestamp,
+            updatedAt: uploadTimestamp
+        };
+
+        await docClient.send(
+            new PutCommand({
+                TableName: tableNames.patients,
+                Item: newPatient
+            })
+        );
+        
+        res.json(newPatient);
+    } catch (err) {
+        console.error('Error creating patient with image:', err);
+        res.status(500).json({ error: 'Failed to create patient' });
+    }
+});
+
+// Create new patient endpoint (legacy)
 app.post('/api/create-patient', async (req, res) => {
     try {
         const patientData = req.body;

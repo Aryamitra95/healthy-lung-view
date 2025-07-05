@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { v4 as uuidv4 } from 'uuid';
-import { docClient } from '@/services/dynamodb';
-import { PutCommand } from '@aws-sdk/lib-dynamodb';
+import { PatientService } from '@/services/patientService';
 
 const symptomsList = [
   'Cough (more than three weeks)',
@@ -17,6 +16,15 @@ const symptomsList = [
   'Fatigue',
   'Blood in Sputum'
 ];
+
+// Required symptoms mapping for the new schema
+const symptomsMapping = {
+  'Cough (more than three weeks)': 'coughMostThatThreeWeek',
+  'Fever': 'fever',
+  'Chest Pain': 'chestPain',
+  'Shortness of Breath': 'shortOfBreath',
+  'Sweating': 'sweating'
+};
 
 interface PatientFormProps {
   onSuccess?: () => void;
@@ -39,6 +47,11 @@ const PatientForm: React.FC<PatientFormProps> = ({ onSuccess, onCancel }) => {
   const [medications, setMedications] = useState('');
   const [emergencyContact, setEmergencyContact] = useState('');
 
+  // Image upload state
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // UI State
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
@@ -51,6 +64,39 @@ const PatientForm: React.FC<PatientFormProps> = ({ onSuccess, onCancel }) => {
         ? prev.filter(s => s !== symptom)
         : [...prev, symptom]
     );
+  };
+
+  const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      if (file.size > 10 * 1024 * 1024) { // 10MB limit
+        setError('Image file size must be less than 10MB');
+        return;
+      }
+      
+      if (!file.type.startsWith('image/')) {
+        setError('Please select a valid image file');
+        return;
+      }
+      
+      setSelectedImage(file);
+      setError('');
+      
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeImage = () => {
+    setSelectedImage(null);
+    setImagePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   const validateForm = () => {
@@ -70,25 +116,48 @@ const PatientForm: React.FC<PatientFormProps> = ({ onSuccess, onCancel }) => {
     if (!validateForm()) return;
     setLoading(true);
     try {
-      const patientId = uuidv4();
-      const item = {
-        PatientID: patientId,
-        name,
-        age: Number(age),
-        sex,
-        email,
-        phone,
-        address,
-        symptoms,
-        medicalHistory,
-        allergies,
-        medications,
-        emergencyContact,
-        createdAt: new Date().toISOString(),
-      };
-      const tableName = import.meta.env.VITE_PATIENTS_TABLE || 'Patients';
-      await docClient.send(new PutCommand({ TableName: tableName, Item: item }));
+      // Create FormData for multipart/form-data submission
+      const formData = new FormData();
+      
+      // Add image if selected
+      if (selectedImage) {
+        formData.append('image', selectedImage);
+      }
+      
+      // Map symptoms to the required schema
+      const mappedSymptoms: Record<string, boolean> = {};
+      symptoms.forEach(symptom => {
+        const mappedKey = symptomsMapping[symptom as keyof typeof symptomsMapping];
+        if (mappedKey) {
+          mappedSymptoms[mappedKey] = true;
+        }
+      });
+      
+      // Add form data
+      formData.append('patientName', name);
+      formData.append('age', age);
+      formData.append('sex', sex);
+      formData.append('email', email);
+      formData.append('phone', phone);
+      formData.append('address', address);
+      formData.append('medicalHistory', medicalHistory);
+      formData.append('allergies', allergies);
+      formData.append('medications', medications);
+      formData.append('emergencyContact', emergencyContact);
+      
+      // Add mapped symptoms
+      Object.entries(mappedSymptoms).forEach(([key, value]) => {
+        formData.append(key, value.toString());
+      });
+      
+      // Add empty arrays/objects for required fields
+      formData.append('longInProgressCn', JSON.stringify({}));
+      formData.append('L1', JSON.stringify([]));
+      
+      // Send to backend using the service
+      const result = await PatientService.createPatientWithImage(formData);
       setSuccess('Patient record created successfully!');
+      
       // Reset form
       setName('');
       setAge('');
@@ -101,6 +170,11 @@ const PatientForm: React.FC<PatientFormProps> = ({ onSuccess, onCancel }) => {
       setAllergies('');
       setMedications('');
       setEmergencyContact('');
+      setSelectedImage(null);
+      setImagePreview(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
       setErrors({});
       if (onSuccess) onSuccess();
     } catch (err) {
@@ -175,6 +249,42 @@ const PatientForm: React.FC<PatientFormProps> = ({ onSuccess, onCancel }) => {
             onChange={e => setAddress(e.target.value)}
             rows={2}
           />
+        </div>
+      </div>
+      
+      {/* Image Upload Section */}
+      <div className="space-y-6 mb-8">
+        <h3 className="text-xl font-semibold border-b pb-2">Chest X-Ray Image</h3>
+        <div>
+          <label className="block text-sm font-medium mb-2">Upload X-Ray Image (Optional)</label>
+          <div className="space-y-4">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleImageSelect}
+              className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+            />
+            {imagePreview && (
+              <div className="relative">
+                <img
+                  src={imagePreview}
+                  alt="Preview"
+                  className="max-w-xs max-h-48 rounded-md border border-green-300"
+                />
+                <button
+                  type="button"
+                  onClick={removeImage}
+                  className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm hover:bg-red-600"
+                >
+                  ×
+                </button>
+              </div>
+            )}
+            <p className="text-sm text-gray-600">
+              Supported formats: JPG, PNG, GIF. Maximum size: 10MB
+            </p>
+          </div>
         </div>
       </div>
       {/* Medical Information */}
