@@ -56,7 +56,7 @@ const tableNames = {
     patients: process.env.VITE_PATIENTS_TABLE || 'Patients'
 };
 
-const S3_BUCKET = process.env.S3_BUCKET_NAME || 'lung-lens-images';
+const S3_BUCKET = process.env.S3_BUCKET_NAME || 'lungsXrays';
 
 const client = new OpenAI({
     baseURL: 'https://api.studio.nebius.com/v1/',
@@ -75,8 +75,8 @@ app.get('/api/search-patients', async (req, res) => {
         const scanResult = await docClient.send(
             new ScanCommand({
                 TableName: tableNames.patients,
-                FilterExpression: 'contains(#name, :q) OR contains(patientId, :q) OR contains(phone, :q)',
-                ExpressionAttributeNames: { '#name': 'name' },
+                FilterExpression: 'contains(#name, :q) OR contains(#PatientID, :q)',
+                ExpressionAttributeNames: { '#name': 'name', '#PatientID': 'PatientID' },
                 ExpressionAttributeValues: { ':q': q },
                 Limit: 20,
             })
@@ -97,7 +97,7 @@ app.get('/api/patient/:id', async (req, res) => {
         const result = await docClient.send(
             new GetCommand({
                 TableName: tableNames.patients,
-                Key: { patientId: id }
+                Key: { PatientID: id }
             })
         );
         
@@ -116,8 +116,8 @@ app.get('/api/patient/:id', async (req, res) => {
 app.put('/api/update-patient', async (req, res) => {
     const patientData = req.body;
     
-    if (!patientData.patientId) {
-        return res.status(400).json({ error: 'Patient ID is required' });
+    if (!patientData.PatientID) {
+        return res.status(400).json({ error: 'PatientID is required' });
     }
 
     try {
@@ -229,15 +229,89 @@ app.get('/api/download-patient-image', async (req, res) => {
     }
 });
 
-// Create new patient endpoint
+// Create new patient with image upload endpoint
+app.post('/api/create-patient-with-image', upload.single('image'), async (req, res) => {
+    try {
+        const patientData = req.body;
+        const PatientID = uuidv4();
+        const uploadTimestamp = new Date().toISOString();
+        
+        let imageUrl = '';
+        let imageKey = '';
+        
+        // Handle image upload if provided
+        if (req.file) {
+            // Generate unique filename
+            const fileExtension = req.file.originalname.split('.').pop();
+            imageKey = `patient-images/${PatientID}-${uuidv4()}.${fileExtension}`;
+            
+            // Upload to S3 with public read access
+            const uploadParams = {
+                Bucket: S3_BUCKET,
+                Key: imageKey,
+                Body: req.file.buffer,
+                ContentType: req.file.mimetype,
+                ACL: 'public-read'
+            };
+
+            await s3Client.send(new PutObjectCommand(uploadParams));
+            
+            // Generate public URL
+            imageUrl = `https://${S3_BUCKET}.s3.amazonaws.com/${imageKey}`;
+        }
+        
+        // Create patient record with the required schema
+        const newPatient = {
+            PatientID,
+            patientName: patientData.patientName || patientData.name,
+            age: Number(patientData.age),
+            sex: patientData.sex,
+            coughMostThatThreeWeek: patientData.coughMostThatThreeWeek === 'true' || patientData.coughMostThatThreeWeek === true,
+            fever: patientData.fever === 'true' || patientData.fever === true,
+            chestPain: patientData.chestPain === 'true' || patientData.chestPain === true,
+            shortOfBreath: patientData.shortOfBreath === 'true' || patientData.shortOfBreath === true,
+            sweating: patientData.sweating === 'true' || patientData.sweating === true,
+            longInProgressCn: patientData.longInProgressCn || {},
+            L1: patientData.L1 || [],
+            imageUrl,
+            imageKey,
+            uploadTimestamp,
+            // Additional fields from existing form
+            email: patientData.email || '',
+            phone: patientData.phone || '',
+            address: patientData.address || '',
+            symptoms: patientData.symptoms || [],
+            medicalHistory: patientData.medicalHistory || '',
+            allergies: patientData.allergies || '',
+            medications: patientData.medications || '',
+            emergencyContact: patientData.emergencyContact || '',
+            createdAt: uploadTimestamp,
+            updatedAt: uploadTimestamp
+        };
+
+        await docClient.send(
+            new PutCommand({
+                TableName: tableNames.patients,
+                Item: newPatient
+            })
+        );
+        
+        res.json(newPatient);
+    } catch (err) {
+        console.error('Error creating patient with image:', err);
+        res.status(500).json({ error: 'Failed to create patient' });
+    }
+});
+
+// Create new patient endpoint (legacy)
 app.post('/api/create-patient', async (req, res) => {
     try {
         const patientData = req.body;
-        const patientId = uuidv4();
+        const PatientID = uuidv4();
         
         const newPatient = {
             ...patientData,
-            patientId,
+            PatientID,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
         };
@@ -319,6 +393,28 @@ Respond ONLY with a valid JSON object, with no markdown, no code block, and no e
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Failed to generate report' });
+    }
+});
+
+// Fetch user by userId endpoint
+app.get('/api/users/:userId', async (req, res) => {
+    const { userId } = req.params;
+    if (!userId) {
+        return res.status(400).json({ error: 'Missing userId' });
+    }
+    try {
+        const command = new GetCommand({
+            TableName: tableNames.patients, // Use Patients table
+            Key: { PatientID: userId },     // Use correct key name
+        });
+        const { Item } = await docClient.send(command);
+        if (!Item) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        return res.status(200).json(Item);
+    } catch (error) {
+        console.error('Error fetching user:', error);
+        return res.status(500).json({ error: 'Internal Server Error' });
     }
 });
 

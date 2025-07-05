@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -9,19 +8,36 @@ import NotFound from "./pages/NotFound";
 import LoginPage from '@/components/LoginPage';
 import Dashboard from '@/components/Dashboard';
 import RegistrarForm from '@/pages/RegistrarForm';
+import PatientForm from '@/pages/PatientForm';
 import { useState } from 'react';
 
 const queryClient = new QueryClient();
 
 const PrivateRoute = ({ children, userId, allowedTypes }) => {
-  // Only check for userId, not full user object
   if (!userId) return <Navigate to="/login" replace />;
-  // allowedTypes check will be handled in the page fetch logic
   return <>{children}</>;
+};
+
+const PatientFormModal = ({ isOpen, onClose, ...props }) => {
+  if (!isOpen) return null;
+  return (
+    <div
+      className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-lg shadow-lg p-8 w-full max-w-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <PatientForm {...props} onCancel={onClose} />
+      </div>
+    </div>
+  );
 };
 
 const App = () => {
   const [userId, setUserId] = useState<string | null>(null);
+  const [showPatientForm, setShowPatientForm] = useState(false);
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -35,7 +51,11 @@ const App = () => {
               path="/doctor"
               element={
                 <PrivateRoute userId={userId} allowedTypes={["doctor"]}>
-                  <Dashboard username={userId || ''} onLogout={() => setUserId(null)} />
+                  <Dashboard
+                    username={userId || ''}
+                    onLogout={() => setUserId(null)}
+                    onAddPatient={() => setShowPatientForm(true)}
+                  />
                 </PrivateRoute>
               }
             />
@@ -43,13 +63,22 @@ const App = () => {
               path="/registerer"
               element={
                 <PrivateRoute userId={userId} allowedTypes={["register"]}>
-                  <RegistrarForm userId={userId} onLogout={() => setUserId(null)} />
+                  <RegistrarForm
+                    userId={userId}
+                    onLogout={() => setUserId(null)}
+                    onAddPatient={() => setShowPatientForm(true)}
+                  />
                 </PrivateRoute>
               }
             />
             <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
+          <PatientFormModal
+            isOpen={showPatientForm}
+            onClose={() => setShowPatientForm(false)}
+            onSuccess={() => setShowPatientForm(false)}
+          />
         </BrowserRouter>
       </TooltipProvider>
     </QueryClientProvider>

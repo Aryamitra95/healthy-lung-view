@@ -1,163 +1,133 @@
 
-import React, { useState, useRef, useEffect } from 'react';
-import { Search, User } from 'lucide-react';
-
-interface Patient {
-  patientId: string;
-  name: string;
-  age: number;
-  sex?: string;
-  symptoms?: string[];
-  email?: string;
-  phone?: string;
-  address?: string;
-  images?: string[];
-}
+import React, { useState } from 'react';
+import { FiSearch, FiAlertTriangle } from 'react-icons/fi';
 
 interface FloatingSearchBarProps {
-  onSelect: (patient: Patient) => void;
+  onPatientSelect: (patientId: string) => void;
 }
 
-const FloatingSearchBar: React.FC<FloatingSearchBarProps> = ({ onSelect }) => {
+const FloatingSearchBar: React.FC<FloatingSearchBarProps> = ({ onPatientSelect }) => {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<Patient[]>([]);
+  const [results, setResults] = useState<any[]>([]);
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showDropdown, setShowDropdown] = useState(false);
-  const debounceRef = useRef<NodeJS.Timeout | null>(null);
-  const searchRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!query.trim()) {
-      setResults([]);
-      setShowDropdown(false);
+  // Helper: check if query looks like a userId (customize as needed)
+  const isUserId = (q: string) => q.length > 0 && !q.match(/\s/);
+
+  const handleSearch = async () => {
+    setError('');
+    setResults([]);
+    const trimmed = query.trim();
+    if (!trimmed) {
+      setError('Please enter a search term.');
       return;
     }
-    
     setLoading(true);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    
-    debounceRef.current = setTimeout(async () => {
-      try {
-        const response = await fetch(`/api/search-patients?q=${encodeURIComponent(query)}`);
-        if (response.ok) {
-          const data = await response.json();
-          setResults(data);
-          setShowDropdown(true);
+    try {
+      if (isUserId(trimmed)) {
+        // Try userId endpoint first
+        const res = await fetch(`/api/users/${encodeURIComponent(trimmed)}`);
+        if (res.ok) {
+          const user = await res.json();
+          setResults([user]);
+        } else if (res.status === 404) {
+          // Fallback to name search if not found
+          const res2 = await fetch(`/api/search-patients?q=${encodeURIComponent(trimmed)}`);
+          if (res2.ok) {
+            const data = await res2.json();
+            if (!data || data.length === 0) {
+              setError('No patients found.');
+            } else {
+              setResults(data);
+            }
+          } else {
+            setError('Search failed.');
+          }
         } else {
-          console.error('Failed to search patients:', response.statusText);
-          setResults([]);
-          setShowDropdown(false);
+          setError('Search failed.');
         }
-      } catch (err) {
-        console.error('Error searching patients:', err);
-        setResults([]);
-        setShowDropdown(false);
-      } finally {
-        setLoading(false);
+      } else {
+        // Name search
+        const res = await fetch(`/api/search-patients?q=${encodeURIComponent(trimmed)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (!data || data.length === 0) {
+            setError('No patients found.');
+          } else {
+            setResults(data);
+          }
+        } else {
+          setError('Search failed.');
+        }
       }
-    }, 300);
+    } catch (err) {
+      setError('An error occurred while searching.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [query]);
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
-        setShowDropdown(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleSearch();
+    }
+  };
 
   return (
-    <div className="fixed top-6 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-2xl px-4" ref={searchRef}>
-      <div className="relative">
-        <div className="relative">
-          <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-green-500 w-5 h-5" />
-          <input
-            type="text"
-            className="w-full rounded-full border-2 border-green-300 bg-white pl-12 pr-6 py-4 shadow-lg focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-green-500 text-lg transition-all"
-            placeholder="Search patients by name, ID, or phone..."
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            onFocus={() => query && setShowDropdown(true)}
-          />
+    <div className="w-full max-w-[600px] mx-auto flex flex-col items-center px-2">
+      <div className="relative w-full flex items-center">
+        <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-green-600 opacity-80 text-xl pointer-events-none" />
+        <input
+          type="text"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={handleInputKeyDown}
+          placeholder="Search patients by name or userId"
+          className="w-full pl-12 pr-4 py-4 border-2 border-green-600 rounded-lg outline-none text-lg transition-all duration-200 focus:ring-2 focus:ring-green-400 focus:border-green-700 bg-white"
+        />
+        <button
+          onClick={handleSearch}
+          disabled={loading}
+          className="ml-3 px-5 py-3 bg-green-600 text-white rounded-lg font-semibold text-base flex items-center transition-all duration-200 hover:bg-green-700 focus:bg-green-700 disabled:opacity-70 disabled:cursor-not-allowed"
+        >
+          Search
+          {loading && (
+            <span className="ml-2 inline-block w-5 h-5 border-2 border-green-200 border-t-green-600 rounded-full animate-spin"></span>
+          )}
+        </button>
+      </div>
+      {error && (
+        <div className="flex items-center gap-2 text-red-600 mt-3 font-medium text-base transition-opacity duration-200">
+          <FiAlertTriangle className="text-xl" />
+          {error}
         </div>
-
-        {showDropdown && (
-          <div className="absolute left-0 right-0 mt-2 bg-white border-2 border-green-200 rounded-xl shadow-2xl max-h-96 overflow-y-auto z-10">
-            {loading && (
-              <div className="px-6 py-4 text-green-600 flex items-center gap-3">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-green-600"></div>
-                Searching patients...
-              </div>
-            )}
-            
-            {!loading && results.length > 0 && (
-              <>
-                {results.map(patient => (
-                  <div
-                    key={patient.patientId}
-                    className="px-6 py-4 cursor-pointer hover:bg-green-50 border-b border-green-100 last:border-b-0 transition-colors"
-                    onClick={() => {
-                      setShowDropdown(false);
-                      setQuery('');
-                      setResults([]);
-                      onSelect(patient);
-                    }}
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="bg-green-100 p-2 rounded-full">
-                        <User className="w-5 h-5 text-green-600" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h3 className="font-semibold text-green-800 text-lg">{patient.name}</h3>
-                            <p className="text-gray-600 text-sm">ID: {patient.patientId}</p>
-                          </div>
-                          <div className="text-right text-sm text-gray-500">
-                            <p>Age: {patient.age}</p>
-                            {patient.sex && <p>{patient.sex}</p>}
-                          </div>
-                        </div>
-                        {patient.phone && (
-                          <p className="text-green-600 text-sm mt-1">📱 {patient.phone}</p>
-                        )}
-                        {patient.symptoms && patient.symptoms.length > 0 && (
-                          <div className="mt-2">
-                            <div className="flex flex-wrap gap-1">
-                              {patient.symptoms.slice(0, 3).map(symptom => (
-                                <span key={symptom} className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs">
-                                  {symptom}
-                                </span>
-                              ))}
-                              {patient.symptoms.length > 3 && (
-                                <span className="text-green-600 text-xs">+{patient.symptoms.length - 3} more</span>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
+      )}
+      <div className="w-full mt-5 flex flex-col gap-3">
+        {results.length > 0 && (
+          <ul>
+            {results.map((patient, idx) => {
+              const id = patient.PatientID || patient.userId;
+              return (
+                <li
+                  key={id || idx}
+                  className="cursor-pointer text-green-600 hover:underline bg-white rounded-xl shadow-md p-5 border border-green-100 transition-all duration-200 mb-3"
+                  onClick={() => onPatientSelect(id)}
+                >
+                  <strong className="text-green-700 text-lg">
+                    {patient.name || patient.userId}
+                  </strong>
+                  <div className="text-gray-700 mt-1">
+                    {patient.PatientID
+                      ? `ID: ${patient.PatientID}`
+                      : patient.userId
+                      ? `UserID: ${patient.userId}`
+                      : ''}
                   </div>
-                ))}
-              </>
-            )}
-            
-            {!loading && results.length === 0 && query.trim() && (
-              <div className="px-6 py-8 text-center text-gray-500">
-                <User className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                <p className="text-lg">No patients found</p>
-                <p className="text-sm">Try searching with a different name or ID</p>
-              </div>
-            )}
-          </div>
+                </li>
+              );
+            })}
+          </ul>
         )}
       </div>
     </div>
