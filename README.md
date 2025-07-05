@@ -1,4 +1,4 @@
-# healthy-lung-view
+# LungLens
 
 A deep learning-powered project for lung health analysis using YOLOv5, YOLOv8, and Vision Transformer (ViT) classifiers.
 
