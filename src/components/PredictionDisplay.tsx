@@ -26,7 +26,7 @@ const PredictionDisplay: React.FC<PredictionDisplayProps> = ({
 }) => {
   const contentRef = useRef<HTMLDivElement>(null);
   const handlePrint = useReactToPrint({
-    content: () => contentRef.current,
+    contentRef: contentRef,
     documentTitle: 'Prediction Report',
   });
 

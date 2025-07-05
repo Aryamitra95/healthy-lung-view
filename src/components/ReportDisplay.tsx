@@ -21,7 +21,7 @@ interface ReportDisplayProps {
 const ReportDisplay: React.FC<ReportDisplayProps> = ({ report, error }) => {
   const contentRef = useRef<HTMLDivElement>(null);
   const handlePrint = useReactToPrint({
-    content: () => contentRef.current,
+    contentRef: contentRef,
     documentTitle: 'Medical Report',
   });
 
